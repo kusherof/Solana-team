@@ -1,6 +1,6 @@
 # Неделя 5 — Counter на Anchor
 
-Силлабус: Counter Program + вызов через **client**.
+Counter Program + вызов через **client**.
 
 `initialize` → 0, `increment` → +1, `decrement` → −1. Клиент: `client/increment.ts`. Тест: `tests/counter.ts`.
 
