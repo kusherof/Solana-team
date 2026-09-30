@@ -1,0 +1,14 @@
+[package]
+name = "week4-first-program"
+version = "0.1.0"
+edition = "2021"
+description = "Неделя 4: первая Solana Program (Devnet)"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "week4_first_program"
+
+[dependencies]
+borsh = "1.5"
+borsh-derive = "1.5"
+solana-program = "~1.18"
