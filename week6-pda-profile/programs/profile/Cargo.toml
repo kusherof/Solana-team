@@ -1,0 +1,16 @@
+[package]
+name = "profile"
+version = "0.1.0"
+description = "Неделя 6: on-chain профиль на PDA"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "profile"
+
+[features]
+default = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.30.1"

@@ -1,28 +1,33 @@
 # Неделя 5 — Counter на Anchor
 
-Счётчик: `initialize` ставит 0, `increment` делает +1. Клиент в `client/increment.ts` вызывает программу и печатает `count`.
+Силлабус: Counter Program + вызов через **client**.
 
-После `anchor deploy` подставь настоящий Program Id в `programs/counter/src/lib.rs` (`declare_id!`) и в `Anchor.toml`.
+`initialize` → 0, `increment` → +1, `decrement` → −1. Клиент: `client/increment.ts`. Тест: `tests/counter.ts`.
 
-## Что нужно
+После деплоя замени `declare_id!` и id в `Anchor.toml` на свой Program Id.
 
-- Solana CLI (Devnet)
-- [Anchor](https://www.anchor-lang.com/docs/installation)
-- Node.js + yarn или npm
+## Поставить Anchor
 
-```bash
+https://www.anchor-lang.com/docs/installation
+
+Нужны ещё Solana CLI (как на неделе 4) и Node.js.
+
+```powershell
 solana config set --url devnet
 solana airdrop 2
 ```
 
-## Сборка, деплой, клиент
+## Сборка, тест, деплой, клиент
 
-```bash
+```powershell
 cd week5-anchor-counter
 yarn
 anchor build
+anchor test --skip-local-validator
 anchor deploy
 yarn client
 ```
 
-Если `count` в консоли вырос — задание недели 5 закрыто: программа + клиент.
+`anchor test` поднимает локальный validator (если не skip). Если тесты зелёные и клиент печатает `count 1` — неделя 5 сдана.
+
+Проверка в Explorer: аккаунт counter, поле count.

@@ -13,9 +13,16 @@ pub mod counter {
         Ok(())
     }
 
-    pub fn increment(ctx: Context<Increment>) -> Result<()> {
+    pub fn increment(ctx: Context<Update>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
-        counter.count = counter.count.checked_add(1).unwrap();
+        counter.count = counter.count.checked_add(1).ok_or(ErrorCode::Overflow)?;
+        Ok(())
+    }
+
+    pub fn decrement(ctx: Context<Update>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        require!(counter.count > 0, ErrorCode::Underflow);
+        counter.count -= 1;
         Ok(())
     }
 }
@@ -36,7 +43,16 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Increment<'info> {
-    #[account(mut)]
+pub struct Update<'info> {
+    #[account(mut, has_one = authority)]
     pub counter: Account<'info, Counter>,
+    pub authority: Signer<'info>,
+}
+
+#[error_code]
+pub enum ErrorCode {
+    #[msg("count overflow")]
+    Overflow,
+    #[msg("count is already 0")]
+    Underflow,
 }

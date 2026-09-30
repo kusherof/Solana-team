@@ -1,0 +1,9 @@
+[package]
+name = "week3-almau-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Неделя 3 (AlmaU): SOL → Lamports и проверка адреса"
+
+[[bin]]
+name = "week3-almau-cli"
+path = "src/main.rs"

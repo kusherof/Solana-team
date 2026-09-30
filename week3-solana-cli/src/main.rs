@@ -54,6 +54,10 @@ enum Commands {
         #[arg(long)]
         program: Option<String>,
     },
+    /// SOL → lamports (1 SOL = 1_000_000_000)
+    Convert { sol: f64 },
+    /// Check Base58 pubkey is 32 bytes
+    CheckAddress { address: String },
     /// On-chain style profile stored at PDA("profile" + owner)
     #[command(subcommand)]
     Profile(ProfileCmd),
@@ -150,6 +154,16 @@ fn run() -> ProgramResult<()> {
             println!("pda:  {pda}");
             println!("bump: {bump}");
             println!("program: {program_id}");
+        }
+        Commands::Convert { sol } => {
+            let lamports = (sol * 1_000_000_000.0) as u64;
+            println!("{sol} SOL = {lamports} lamports");
+        }
+        Commands::CheckAddress { address } => {
+            let pk = Pubkey::from_str(&address)?;
+            println!("ok, 32 bytes");
+            println!("{pk}");
+            println!("hex {}", hex::encode(pk.as_bytes()));
         }
         Commands::Profile(ProfileCmd::Init { owner, username }) => {
             let ix = Instruction::InitializeProfile {

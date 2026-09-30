@@ -1,34 +1,49 @@
 # Неделя 4 — первая Solana Program
 
-Простая on-chain программа: в аккаунте лежит число, каждый вызов делает +1.
+Силлабус: создать программу и задеплоить в **Devnet**.
 
-Это уже не CLI с недели 3. Тут код живёт в Devnet.
+Программа умеет две инструкции: **initialize** (создаёт аккаунт со счётчиком = 0) и **increment** (+1). Клиент в `client/demo.ts`.
 
-## Что нужно поставить
+Это уже on-chain, не CLI с недели 3.
 
-- [Rust](https://rustup.rs)
-- [Solana CLI](https://solana.com/docs/intro/installation)
+## Проверить код локально (без сети)
 
-```bash
+```powershell
+cd week4-first-program
+cargo test --features no-entrypoint
+```
+
+Должен пройти тест `counter_roundtrip`.
+
+## Поставить Solana CLI (один раз)
+
+См. [установку](https://solana.com/docs/intro/installation). Потом:
+
+```powershell
+solana --version
 solana config set --url devnet
 solana-keygen new
 solana airdrop 2
+solana balance
 ```
 
-## Сборка и деплой
+## Сборка и деплой (это и есть сдача недели 4)
 
-```bash
+```powershell
 cd week4-first-program
 cargo build-sbf
 solana program deploy target/deploy/week4_first_program.so
 ```
 
-После деплоя сохрани Program Id — его надо показать на защите (Explorer, cluster Devnet).
+Скопируй **Program Id**. Открой его в Explorer (Devnet) — программа должна быть видна.
 
-## Как дёргать программу
+## Клиент (проверка, что программа живая)
 
-1. Создай аккаунт на 8 байт, owner = твоя программа.
-2. Отправь транзакцию с инструкцией на этот аккаунт.
-3. В логах будет `count = ...`.
+```powershell
+cd week4-first-program
+npm install
+$env:PROGRAM_ID="сюда_program_id"
+npm run demo
+```
 
-Пока программу не задеплоишь, в Explorer её не будет — это нормально, деплой делается у себя с кошелька.
+В консоли будет `count 1` и ссылка на транзакцию. Если count = 1 — неделя 4 закрыта.

@@ -1,10 +1,9 @@
 {
-  "name": "week5-anchor-counter",
+  "name": "week6-pda-profile",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
   "scripts": {
-    "client": "ts-node client/increment.ts"
+    "client": "ts-node client/profile.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",

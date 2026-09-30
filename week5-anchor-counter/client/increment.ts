@@ -1,7 +1,5 @@
 /**
- * Клиент недели 5: initialize + increment через Anchor.
- * Перед запуском: anchor build && anchor deploy
- * Потом подставь свой program id в Anchor.toml и в lib.rs (declare_id!).
+ * После anchor deploy подставь Program Id в lib.rs и Anchor.toml.
  */
 import * as fs from "fs";
 import * as anchor from "@coral-xyz/anchor";
@@ -27,15 +25,17 @@ async function main() {
     .signers([counter])
     .rpc();
 
-  console.log("created", counter.publicKey.toBase58());
-
   await program.methods
     .increment()
-    .accounts({ counter: counter.publicKey })
+    .accounts({
+      counter: counter.publicKey,
+      authority: provider.wallet.publicKey,
+    })
     .rpc();
 
   const account = await program.account.counter.fetch(counter.publicKey);
-  console.log("count =", account.count.toString());
+  console.log("counter", counter.publicKey.toBase58());
+  console.log("count", account.count.toString());
 }
 
 main().catch((err) => {
