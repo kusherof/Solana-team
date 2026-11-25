@@ -1,0 +1,26 @@
+[package]
+name = "liquidity-vault"
+version = "0.1.0"
+description = "Учебный Liquidity Vault: депозиты, share-токены и управление ликвидностью в Raydium CLMM"
+edition = "2021"
+rust-version = "1.79"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "liquidity_vault"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+# Сборка под devnet: подставляет адрес программы Raydium CLMM в devnet
+devnet = ["raydium-amm-v3/devnet"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+anchor-spl = { version = "0.31.1", features = ["token", "token_2022", "associated_token", "memo"] }
+# Официальная библиотека Raydium CLMM для CPI (зафиксирована на коммите с Anchor 0.31)
+raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", rev = "d4ec101", features = ["cpi"] }

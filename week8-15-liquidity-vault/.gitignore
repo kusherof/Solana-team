@@ -1,0 +1,17 @@
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+node_modules
+test-ledger
+.yarn
+dist
+# Никогда не коммитим ключи
+*-keypair.json
+id.json
+*.key
+.env
+app/.next
+app/node_modules
+tests/fixtures/*.so
+deployments/localnet.json

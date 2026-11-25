@@ -1,4 +1,4 @@
-# Solana team — недели 1–7
+# Solana team — недели 1–15
 
 | Папка | Неделя | Что сдать |
 |---|---|---|
@@ -10,6 +10,7 @@
 | [week5-anchor-counter](week5-anchor-counter) | 5 | Counter на Anchor + client |
 | [week6-pda-profile](week6-pda-profile) | 6 | Профиль на PDA |
 | [week7-spl-token](week7-spl-token) | 7 | Token-2022: mint, transfer, metadata |
+| [week8-15-liquidity-vault](week8-15-liquidity-vault) | 8–15 | Сквозной проект Liquidity Vault: vault на PDA, share-токены, депозит/вывод через CPI, swap и позиции Raydium CLMM, веб-интерфейс, Demo Day |
 
 Как проверять: [КАК-ПРОВЕРИТЬ.md](КАК-ПРОВЕРИТЬ.md)
 
