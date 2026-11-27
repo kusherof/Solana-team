@@ -182,7 +182,7 @@ Raydium при открытии позиции списывает с «плат�
 
 `swap` вызывает `swap_v2` с `is_base_input = true`: точная сумма на входе и `minimum_amount_out` на выходе.
 Ожидаемую сумму клиент узнаёт **симуляцией той же транзакции** (`.simulate()`, читаем событие `SwapEvent`) и ставит минимум на 1% ниже.
-Если пул отдаёт меньше минимума, Raydium откатывает всю транзакцию с ошибкой `TooLittleOutputReceived` (код 6022).
+Если пул отдаёт меньше минимума, Raydium откатывает всю транзакцию с ошибкой `TooLittleOutputReceived` (код 6018).
 
 ### Позиция
 
@@ -259,23 +259,47 @@ npm run vault -- status               # состояние vault и пула
 
 ## Devnet: адреса и транзакции
 
-> Заполняется после деплоя. Все адреса и подписи транзакций скрипты сохраняют в [`deployments/devnet.json`](deployments/devnet.json).
-> Ссылка: `https://explorer.solana.com/address/<АДРЕС>?cluster=devnet` или `https://explorer.solana.com/tx/<ПОДПИСЬ>?cluster=devnet`.
+Программа развёрнута в devnet, весь сценарий из [`ЗАПУСК.md`](ЗАПУСК.md) пройден. Адреса и подписи транзакций лежат в [`deployments/devnet.json`](deployments/devnet.json).
 
-| Что | Адрес / транзакция |
+**Адреса**
+
+| Что | Адрес |
 |---|---|
-| Программа `liquidity_vault` | _после `anchor deploy`_ |
-| Токен A / токен B | _из `deployments/devnet.json`: `mintA`, `mintB`_ |
-| CLMM-пул Raydium | _`pool`_ |
-| Своя позиция (неделя 11) | _`ownPositionNft`_ |
-| Vault / vault_authority / share_mint | _`vault`, `vaultAuthority`, `shareMint`_ |
-| Хранилища vault_a / vault_b | _`vaultA`, `vaultB`_ |
-| Создание vault (нед. 8) | _`txs.initializeVault`_ |
-| Депозит (нед. 9) | _`txs.deposit`_ |
-| Вывод (нед. 10) | _`txs.withdraw`_ |
-| Обмен (нед. 12) | _`txs.swapAtoB`_ |
-| Обмен, отклонённый из-за slippage (нед. 12) | _`txs.swapRejectedBySlippage`_ |
-| Открытие / сбор комиссий / закрытие позиции (нед. 13) | _`txs.openPosition`, `txs.collectFees`, `txs.closePosition`_ |
+| Программа `liquidity_vault` | [`96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU`](https://explorer.solana.com/address/96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU?cluster=devnet) |
+| Raydium CLMM (devnet) | [`DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH`](https://explorer.solana.com/address/DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH?cluster=devnet) |
+| Админ (кошелёк) | [`6Php2APfxdt14DZG7Wruq2kPpRcjWpQkir5TX29nU3Kn`](https://explorer.solana.com/address/6Php2APfxdt14DZG7Wruq2kPpRcjWpQkir5TX29nU3Kn?cluster=devnet) |
+| Токен A | [`3EzwLJ6DsngqAqror8iZWzYeQe1fbGrtngCCDfeenpXq`](https://explorer.solana.com/address/3EzwLJ6DsngqAqror8iZWzYeQe1fbGrtngCCDfeenpXq?cluster=devnet) |
+| Токен B | [`CCWRbhSb8BYnuPureBfVCSLiAorPFpwKm7DGLwn4yZBU`](https://explorer.solana.com/address/CCWRbhSb8BYnuPureBfVCSLiAorPFpwKm7DGLwn4yZBU?cluster=devnet) |
+| AmmConfig (tickSpacing 60, комиссия 0.25%) | [`CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu`](https://explorer.solana.com/address/CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu?cluster=devnet) |
+| CLMM-пул Raydium | [`D69RAEuzoJZrjnyfvrR4L89Nu6oE8jN27dGKq4ftvDAA`](https://explorer.solana.com/address/D69RAEuzoJZrjnyfvrR4L89Nu6oE8jN27dGKq4ftvDAA?cluster=devnet) |
+| Своя позиция, NFT (нед. 11) | [`Bf6vDGqSdm5nDQUz98Kob7LMREvoE9RqSNA7c4Cy2qUW`](https://explorer.solana.com/address/Bf6vDGqSdm5nDQUz98Kob7LMREvoE9RqSNA7c4Cy2qUW?cluster=devnet) |
+| Vault | [`5Whod5S2vALvitfQf5pGzn9tvPwvsdh1Xuz9N4bp5vdv`](https://explorer.solana.com/address/5Whod5S2vALvitfQf5pGzn9tvPwvsdh1Xuz9N4bp5vdv?cluster=devnet) |
+| vault_authority | [`AvZSdTzWBDSqCrmara5tLGcEVQSdw56nMdQfjFYG8NYa`](https://explorer.solana.com/address/AvZSdTzWBDSqCrmara5tLGcEVQSdw56nMdQfjFYG8NYa?cluster=devnet) |
+| share_mint | [`2b92EVKgiWAdN3o3j5ye5MdkQ3VFYG6vfw7dvFjoJ7ag`](https://explorer.solana.com/address/2b92EVKgiWAdN3o3j5ye5MdkQ3VFYG6vfw7dvFjoJ7ag?cluster=devnet) |
+| Хранилище vault_a | [`5yK7bNvLhSFQZYx11aF91SS15qcnvJSNfZWsrRgBucT3`](https://explorer.solana.com/address/5yK7bNvLhSFQZYx11aF91SS15qcnvJSNfZWsrRgBucT3?cluster=devnet) |
+| Хранилище vault_b | [`Gj3kFUu6eRWDVNKAthVpxVbWpvt8wTS31BgzJADbhy8m`](https://explorer.solana.com/address/Gj3kFUu6eRWDVNKAthVpxVbWpvt8wTS31BgzJADbhy8m?cluster=devnet) |
+
+**Транзакции** (в порядке выполнения)
+
+| # | Шаг | Транзакция | Результат |
+|---|---|---|---|
+| 1 | Создание пула (нед. 11) | [TezJ838Z…](https://explorer.solana.com/tx/TezJ838Z3fHkAFzfUK7X7SvayLo74Tq5pKRuo6HZDEcuydGwpLaNpxyAUwj5shNVqdKDQnL5ahazpgjscp36UUR?cluster=devnet) | начальная цена 1 B за 1 A |
+| 2 | Своя позиция (нед. 11) | [5qDtwVqh…](https://explorer.solana.com/tx/5qDtwVqhGLYpnF7zH7RQdQ3uCoayAs5aYmzZYRasDoM1dA6A7d9Ti5qv3S9ZzP9gPVPjHnEcyH8ynn7vg7rUdoxf?cluster=devnet) | тики [−1080, 960] = 0.8976 … 1.1008 |
+| 3 | Создание vault (нед. 8) | [4Kwajkii…](https://explorer.solana.com/tx/4KwajkiiDckqTPwAddWLCpjVsgkxmL8VMSkB5bP8u3AfpEbJgTzn9N4JsDaaQmrB3GTDB3BcWTftX9VeysXRLapA?cluster=devnet) | |
+| 4 | Карточка пользователя (нед. 8) | [HXYmqVw9…](https://explorer.solana.com/tx/HXYmqVw9NaWbYtsfq6NTLErkpJkEgcFueYrbJvEnC5HjY5GJVL5Aj9Xw1FJJ3DowGcLHxurmsvj6gHLF3QWRGsZ?cluster=devnet) | |
+| 5 | Депозит 1000 A (нед. 9) | [5ubKiBLe…](https://explorer.solana.com/tx/5ubKiBLecmUFYQd2pBoRKNPwXo5r5K9EUpe8JuYVkNfWfLtr4aiCqBytHv9MymM2dJKWcouUgstW8QvfBm2LFXX4?cluster=devnet) | выпущено 1000 share |
+| 6 | Вывод 100 share (нед. 10) | [5dVHNQaH…](https://explorer.solana.com/tx/5dVHNQaHH2SPaR63bN2UQmDPeaZrJhizrVwaxQ9Lk9jEbEbrDPkvbroHK3DmZtp9zw5gPsPCVuasmeAmNHan9cc6?cluster=devnet) | в vault осталось 900 A |
+| 7 | Привязка пула (нед. 12) | [4CV81dxZ…](https://explorer.solana.com/tx/4CV81dxZxNpnA3EZata36vFqLvByciqN2XB6S3VmW7GGSCpLGWLPGZcpgXpEtG5VExasa6i79sChsNKSypeUFLjV?cluster=devnet) | |
+| 8 | Обмен 450 A → B (нед. 12) | [5TVhsawb…](https://explorer.solana.com/tx/5TVhsawbNJ7Eu4Su5iXT9HU9FS9CWhZsGRHVtTMsjBPg295Pzxu82hHRuvLsd2qtRsbfpn6yPLsHUQnD7giL8s6x?cluster=devnet) | получено 447.81 B (минимум 443.33), тик 0 → −48 |
+| 9 | Обмен с минимумом +50% (нед. 12) | [cYPxXZGq…](https://explorer.solana.com/tx/cYPxXZGq7KPSa6DmeGpD42WxfJ6bi9fVw7CNEby8m9srZKkDM8vAZWRNHiKehAgzxQ1yaceihASr9VYMgH4TBH1?cluster=devnet) | отклонён: `TooLittleOutputReceived` (6018), цена не изменилась |
+| 10 | Открытие позиции (нед. 13) | [foAB6VEa…](https://explorer.solana.com/tx/foAB6VEa3kbUXQSn2qS9aTztAYQ59oF8rz8md2kJ6pbCGqbdPYWsYAo97RoJP2CBjunZRWN1y5g4VVyAG1kcJw2?cluster=devnet) | тики [−1140, 960] = 0.8923 … 1.1008, NFT [`33xUGni3wtNnVBitS43hqpUt7bLGeQh8aikyyP9iVDn6`](https://explorer.solana.com/address/33xUGni3wtNnVBitS43hqpUt7bLGeQh8aikyyP9iVDn6?cluster=devnet) |
+| 11 | 8 обменов трейдера по 200 | [1](https://explorer.solana.com/tx/32JH5zhEzJ6eXFeUsxgRz3D3xtSfVTKmSDxm7kYeZVN4VaWDyM2ghx9i3f2nXNCb4NKc8z6SJgTFf4N1T3Q57VF?cluster=devnet) · [2](https://explorer.solana.com/tx/2V3UMD6jDVfVUQpLHyE3xcueyA9Jjae2YjyyGbcgJpykAGRDHd7jhDbuBo9CyTgdvKVt3PbM64Kd7idBRNmYggN8?cluster=devnet) · [3](https://explorer.solana.com/tx/37E2TFRbY3aNfozEY3hbKCiuny2nuMQtEHwQ4Rai2bVhTqaVKh1D5R97G8RHR7q6AgmcXhqCrsdgz5btSArZrEvg?cluster=devnet) · [4](https://explorer.solana.com/tx/38hQZPbJZr3cEbJ4YgikFaNdheqHqqp5iHP6ipRfSvpZput2LBKmiq6y1NCEopXhb1mYGpn1Gq2XwxXeeXp8sy3G?cluster=devnet) · [5](https://explorer.solana.com/tx/5YhUWEyNCyj63Szwrq5dyxrz8bRYjG7EwiKUGiY8XTKtwhNihLRTiZGgkcLSnjzrENnhCCyFLnLHTejGr4xSgBLD?cluster=devnet) · [6](https://explorer.solana.com/tx/4TQXpcjshJZbMmUPAvx8kTJbCT92nEeipuXVAk7x818ok6JyhVHdQVs58GZ6BKeBGoJZoWQF8ZGneBzDTbqyhdfX?cluster=devnet) · [7](https://explorer.solana.com/tx/3nNdtZ53x1rQ7d15JNDvaH5YvxU7eFeemGvV3hRdyYLfs26jzVAic3rwWQhkPHZ2baSwXMCFmVZUBhYgwup6DeQM?cluster=devnet) · [8](https://explorer.solana.com/tx/2Bbdk112wVKKEcDcd3RvwZz8vc2igKcrcctCdfjMyJwycnER17oPWvFJM2DzaL9aZMb84HQAzgV3T8icfDfk6D1c?cluster=devnet) | |
+| 12 | Сбор комиссий (нед. 13) | [Wudj9yNr…](https://explorer.solana.com/tx/Wudj9yNreCvKgvRTL1ejwA7HuGPemstHpubodNohUKhBurTrgJu18Rz6nTUVdSDE2dDDwv2jaPWj4NwHdcQSYGF?cluster=devnet) | комиссии: 0.070717 A + 0.070717 B |
+| 13 | Закрытие позиции (нед. 13) | [5Sc18DrP…](https://explorer.solana.com/tx/5Sc18DrPtE27XYn83raHmsa13vKcw45TDntZzFSbAm5R2hRMv41zdHV4mX3Q75zCr2VZQUjMxywrx6XAZu1CseFn?cluster=devnet) | вернулось 407.39 A + 439.04 B |
+| 14 | Обмен всего B → A (нед. 12) | [4GGroYjD…](https://explorer.solana.com/tx/4GGroYjDLttW6R9qPoNu344e9F4tAZCB7rtht35v5ZEQm8wQfVb4NtRdeQrEQYuWEaWuxqeTpd9MwBnwPVEBjGGt?cluster=devnet) | тик −48 → 0, в vault 897.87 A, цена share 0.9976 A |
+| 15 | Вывод оставшихся 900 share (нед. 10) | [2rgdiCRo…](https://explorer.solana.com/tx/2rgdiCRoP49xTS4gVzqrt891AJDohURKtyQ7vh5Fy5WzjMtBvdVixaaVfbmC4V3q4pzhnt84qE5eZ8xEXpURFhPM?cluster=devnet) | vault пуст |
+
+Итог: внесено 1000 A, выведено 100 + 897.87 A. Разница ≈ 2.13 A: комиссии пула за два обмена vault (0.25% с 450 A и с ~447 B) и потери от сдвига цены; заработанные комиссии позиции (≈ 0.07 A + 0.07 B) их не перекрыли, потому что трейдер сделал всего 8 обменов.
 
 **Пул (неделя 11).** Начальная цена 1 B за 1 A (оба токена учебные, 6 decimals).
 Своя позиция в диапазоне **±10%** (≈ 0.90 … 1.10): для пары без внешнего рынка этого хватает, чтобы учебные обмены не выталкивали цену из диапазона,

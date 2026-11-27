@@ -161,7 +161,7 @@ async function main() {
         tx.sign(wallet);
         const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
         const res = await connection.confirmTransaction(sig, "confirmed");
-        console.log("  результат:", JSON.stringify(res.value.err), "(6022 = TooLittleOutputReceived у Raydium)");
+        console.log("  результат:", JSON.stringify(res.value.err), "(6018 = TooLittleOutputReceived у Raydium)");
         recordTx(d, "swapRejectedBySlippage", sig);
       } else {
         const sig = await builder.rpc();
