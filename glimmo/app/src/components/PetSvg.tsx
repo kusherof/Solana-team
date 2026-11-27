@@ -26,6 +26,7 @@ export type PetLook = {
   satiety?: number;
   mood?: number;
   eggProgress?: number; // 0..1 для яйца
+  form?: number; // облик взрослого: 1 сияющий, 2 обычный, 3 ворчливый
 };
 
 function hsl(h: number, s: number, l: number, a = 1) {
@@ -109,14 +110,16 @@ function Eyes({ t, cx, y, sleepy, sad, uid }: { t: Traits; cx: number; y: number
   );
 }
 
-export default function PetSvg({ dna, stage, satiety = 80, mood = 80, eggProgress = 0, size = 220 }: PetLook & { size?: number }) {
+export default function PetSvg({ dna, stage, satiety = 80, mood = 80, eggProgress = 0, form = 0, size = 220 }: PetLook & { size?: number }) {
   const uid = useId().replace(/:/g, "");
   const t = traits(dna);
   const body = BODIES[t.body];
   const top = TOP[t.body];
   const eyeY = EYE_Y[t.body];
   const scale = STAGE_SCALE[stage];
-  const happy = mood > 60 && satiety > 40;
+  const radiant = stage === 3 && form === 1;
+  const grumpy = stage === 3 && form === 3;
+  const happy = mood > 60 && satiety > 40 && !grumpy;
   const sad = mood < 25 || satiety < 15;
   const sleepy = satiety < 25 && !sad;
   const main = hsl(t.hue, t.sat, 58);
@@ -173,7 +176,7 @@ export default function PetSvg({ dna, stage, satiety = 80, mood = 80, eggProgres
   });
 
   return (
-    <svg viewBox="0 0 200 200" width={size} height={size} className={`pet-svg ${sad ? "is-sad" : ""} ${t.shiny ? "is-shiny" : ""}`}>
+    <svg viewBox="0 0 200 200" width={size} height={size} className={`pet-svg ${sad ? "is-sad" : ""} ${t.shiny ? "is-shiny" : ""} ${grumpy ? "is-grumpy" : ""}`} role="img" aria-label="Питомец">
       {filters}
       <ellipse cx="100" cy="188" rx={52 * scale} ry="7" fill="black" opacity="0.35" className="shadow" />
       <g className="float">
@@ -236,8 +239,24 @@ export default function PetSvg({ dna, stage, satiety = 80, mood = 80, eggProgres
             </g>
             {stage === 3 && <path d={body} fill="none" stroke={t.shiny ? `url(#shiny-${uid})` : accent} strokeWidth="2.5" opacity="0.8" />}
 
+            {/* облик взрослого */}
+            {radiant && (
+              <ellipse cx="100" cy={top - 14} rx="26" ry="7" fill="none" stroke="#ffe97a" strokeWidth="4" filter={`url(#softglow-${uid})`} className="halo" />
+            )}
+            {grumpy && (
+              <g fill={dark}>
+                <path d={`M92 ${top + 6} C86 ${top - 10} 98 ${top - 16} 100 ${top - 4} C104 ${top - 18} 116 ${top - 10} 108 ${top + 6} Z`} />
+              </g>
+            )}
+
             {/* лицо */}
             <Eyes t={t} cx={100} y={eyeY} sleepy={sleepy} sad={sad} uid={uid} />
+            {grumpy && (
+              <g stroke="#120a2a" strokeWidth="4" strokeLinecap="round">
+                <line x1={t.eyes === 3 ? 82 : 66} y1={eyeY - 22} x2={t.eyes === 3 ? 96 : 90} y2={eyeY - 15} />
+                <line x1={t.eyes === 3 ? 118 : 134} y1={eyeY - 22} x2={t.eyes === 3 ? 104 : 110} y2={eyeY - 15} />
+              </g>
+            )}
             {happy && (
               <g fill="#ff7ab8" opacity="0.55">
                 <ellipse cx="66" cy={mouthY - 4} rx="9" ry="5" />
@@ -255,8 +274,8 @@ export default function PetSvg({ dna, stage, satiety = 80, mood = 80, eggProgres
           </g>
         </g>
       </g>
-      {t.shiny && (
-        <g className="sparkles" fill="white">
+      {(t.shiny || radiant) && (
+        <g className="sparkles" fill={radiant && !t.shiny ? "#ffe97a" : "white"}>
           <path d="M40 60 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 Z" />
           <path d="M160 50 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2 Z" />
           <path d="M168 140 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z" />

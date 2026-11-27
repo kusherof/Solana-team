@@ -15,7 +15,7 @@ import {
 } from "@solana/spl-token";
 import idl from "../idl/glimmo.json";
 import type { Glimmo } from "../idl/glimmo";
-import { Backend, GameState, Params, Pet, TxResult } from "./model";
+import { Backend, GameState, Params, Pet, TxResult, setClockOffset } from "./model";
 
 export const RPC_URL: string = import.meta.env.VITE_RPC_URL || "https://api.devnet.solana.com";
 export const PROGRAM_ID = new PublicKey((idl as any).address);
@@ -41,18 +41,28 @@ function humanError(e: any): Error {
   if (code && ERRORS[code]) return new Error(ERRORS[code]);
   const msg = String(e?.message ?? e);
   if (msg.includes("User rejected")) return new Error("Транзакция отменена в кошельке");
+  if (msg.includes("no record of prior credit"))
+    return new Error("На кошельке нет devnet SOL — пополните на faucet.solana.com");
   if (msg.includes("insufficient")) return new Error("Недостаточно SOL или FOOD");
-  if (msg.includes("Account does not exist") && msg.includes("config"))
-    return new Error("Игра ещё не создана в devnet: запустите npm run devnet:init");
+  if (msg.includes("Blockhash not found") || msg.includes("block height exceeded"))
+    return new Error("Сеть не успела подтвердить транзакцию, попробуйте ещё раз");
+  if (msg.includes("429")) return new Error("RPC перегружен (429). Укажите свой RPC в VITE_RPC_URL");
+  if (code === "AccountNotInitialized" && msg.includes("player"))
+    return new Error("Сначала заведите питомца: кормушка только для хозяев");
   return new Error(msg.length > 160 ? msg.slice(0, 160) + "…" : msg);
 }
 
-const toPet = (key: PublicKey, a: any): Pet => ({
+/** Коллизия номера питомца: кто-то купил яйцо в тот же момент. */
+const isIdRace = (e: any) => /ConstraintSeeds|already in use/.test(String(e?.message ?? e) + (e?.error?.errorCode?.code ?? ""));
+
+const toPet = (key: PublicKey, a: any, tokenAccount?: string): Pet => ({
   key: key.toBase58(),
   mint: a.mint.toBase58(),
+  tokenAccount,
   id: a.id.toNumber(),
   name: a.name,
   dna: Array.from(a.dna as number[]),
+  dnaB: Array.from(a.dnaB as number[]),
   generation: a.generation,
   parentA: a.parentA.equals(PublicKey.default) ? null : a.parentA.toBase58(),
   parentB: a.parentB.equals(PublicKey.default) ? null : a.parentB.toBase58(),
@@ -69,6 +79,11 @@ const toPet = (key: PublicKey, a: any): Pet => ({
   timesFed: a.timesFed,
   timesPlayed: a.timesPlayed,
   children: a.children,
+  bond: a.bond,
+  streak: a.streak,
+  lastCarePeriod: a.lastCarePeriod.toNumber(),
+  careMistakes: a.careMistakes,
+  form: a.form,
 });
 
 export class ChainBackend implements Backend {
@@ -93,8 +108,9 @@ export class ChainBackend implements Backend {
   }
 
   async load(): Promise<GameState> {
-    const cfg = await this.program.account.config.fetch(CONFIG).catch(() => null);
-    if (!cfg) throw new Error("Игра ещё не создана в devnet: запустите npm run devnet:init");
+    const info = await this.conn.getAccountInfo(CONFIG);
+    if (!info) throw new Error("Игра ещё не создана в devnet: запустите npm run devnet:init");
+    const cfg = this.program.coder.accounts.decode("config", info.data);
     const p = cfg.params;
     const params: Params = {
       eggPrice: p.eggPrice.toNumber(),
@@ -108,20 +124,28 @@ export class ChainBackend implements Backend {
       xpPerLevel: p.xpPerLevel,
       teenLevel: p.teenLevel,
       adultLevel: p.adultLevel,
+      carePeriod: p.carePeriod.toNumber(),
     };
+
+    // Сверяем часы с блокчейном, чтобы кнопки не загорались раньше времени
+    try {
+      const bt = await this.conn.getBlockTime(await this.conn.getSlot());
+      if (bt) setClockOffset(bt - Math.floor(Date.now() / 1000));
+    } catch {
+      /* не страшно */
+    }
 
     // Ищем все NFT кошелька на Token-2022 и проверяем, есть ли у них Pet PDA
     const tokens = await this.conn.getParsedTokenAccountsByOwner(this.owner, {
       programId: TOKEN_2022_PROGRAM_ID,
     });
-    const mints = tokens.value
-      .map((t) => t.account.data.parsed.info)
-      .filter((i) => i.tokenAmount.amount === "1" && i.tokenAmount.decimals === 0)
-      .map((i) => new PublicKey(i.mint));
-    const keys = mints.map(petPda);
+    const held = tokens.value
+      .map((t) => ({ acc: t.pubkey.toBase58(), info: t.account.data.parsed.info }))
+      .filter(({ info }) => info.tokenAmount.amount === "1" && info.tokenAmount.decimals === 0);
+    const keys = held.map(({ info }) => petPda(new PublicKey(info.mint)));
     const accs = keys.length ? await this.program.account.pet.fetchMultiple(keys) : [];
     const pets = accs
-      .map((a, i) => (a ? toPet(keys[i], a) : null))
+      .map((a, i) => (a ? toPet(keys[i], a, held[i].acc) : null))
       .filter(Boolean)
       .sort((a, b) => a!.id - b!.id) as Pet[];
 
@@ -137,7 +161,14 @@ export class ChainBackend implements Backend {
       food: food ? Number(food.value.amount) : 0,
       lastFoodClaim: player ? player.lastFoodClaim.toNumber() : 0,
       totalPets: cfg.totalPets.toNumber(),
+      hasPlayer: !!player && (player.eggsAdopted > 0 || player.petsBred > 0),
     };
+  }
+
+  /** Рейтинг: все питомцы программы (getProgramAccounts). */
+  async leaderboard(): Promise<Pet[]> {
+    const all = await this.program.account.pet.all();
+    return all.map((a) => toPet(a.publicKey, a.account)).filter((p) => p.hatched);
   }
 
   claimFood() {
@@ -157,35 +188,50 @@ export class ChainBackend implements Backend {
   }
 
   async adopt(name: string): Promise<TxResult> {
-    const cfg = await this.program.account.config.fetch(CONFIG);
-    const mint = petMintPda(cfg.totalPets.toNumber());
-    const r = await this.run(() =>
-      this.program.methods
-        .adoptEgg(name)
-        .accountsPartial({
-          owner: this.owner,
-          config: CONFIG,
-          treasury: TREASURY,
-          player: playerPda(this.owner),
-          petMint: mint,
-          petToken: petAta(mint, this.owner),
-          pet: petPda(mint),
-          slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
-          token2022Program: TOKEN_2022_PROGRAM_ID,
-        })
-        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
-        .rpc()
-    );
-    return { ...r, newPetKey: petPda(mint).toBase58() };
+    for (let attempt = 0; ; attempt++) {
+      const cfg = await this.program.account.config.fetch(CONFIG);
+      const mint = petMintPda(cfg.totalPets.toNumber());
+      try {
+        const sig = await this.program.methods
+          .adoptEgg(name)
+          .accountsPartial({
+            owner: this.owner,
+            config: CONFIG,
+            treasury: TREASURY,
+            player: playerPda(this.owner),
+            petMint: mint,
+            petToken: petAta(mint, this.owner),
+            pet: petPda(mint),
+            token2022Program: TOKEN_2022_PROGRAM_ID,
+          })
+          .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 })])
+          .rpc();
+        return { sig, newPetKey: petPda(mint).toBase58() };
+      } catch (e) {
+        if (attempt === 0 && isIdRace(e)) continue;
+        throw humanError(e);
+      }
+    }
   }
 
   private petAccs(pet: Pet) {
     const mint = new PublicKey(pet.mint);
-    return { owner: this.owner, config: CONFIG, pet: petPda(mint), petToken: petAta(mint, this.owner) };
+    const petToken = pet.tokenAccount ? new PublicKey(pet.tokenAccount) : petAta(mint, this.owner);
+    return { owner: this.owner, config: CONFIG, pet: petPda(mint), petToken };
   }
 
   hatch(pet: Pet) {
-    return this.run(() => this.program.methods.hatch().accountsPartial(this.petAccs(pet)).rpc());
+    return this.run(() =>
+      this.program.methods
+        .hatch()
+        .accountsPartial({
+          ...this.petAccs(pet),
+          petMint: new PublicKey(pet.mint),
+          slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+        })
+        .rpc()
+    );
   }
 
   play(pet: Pet) {
@@ -220,34 +266,38 @@ export class ChainBackend implements Backend {
   }
 
   async breed(a: Pet, b: Pet, name: string): Promise<TxResult> {
-    const cfg = await this.program.account.config.fetch(CONFIG);
-    const childMint = petMintPda(cfg.totalPets.toNumber());
     const ma = new PublicKey(a.mint);
     const mb = new PublicKey(b.mint);
-    const r = await this.run(() =>
-      this.program.methods
-        .breed(name)
-        .accountsPartial({
-          owner: this.owner,
-          partner: this.owner, // в интерфейсе оба родителя ваши; два игрока — см. тесты
-          config: CONFIG,
-          player: playerPda(this.owner),
-          parentA: petPda(ma),
-          parentAToken: petAta(ma, this.owner),
-          parentB: petPda(mb),
-          parentBToken: petAta(mb, this.owner),
-          foodMint: FOOD,
-          ownerFood: foodAta(this.owner),
-          childMint,
-          childToken: petAta(childMint, this.owner),
-          child: petPda(childMint),
-          slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          token2022Program: TOKEN_2022_PROGRAM_ID,
-        })
-        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
-        .rpc()
-    );
-    return { ...r, newPetKey: petPda(childMint).toBase58() };
+    for (let attempt = 0; ; attempt++) {
+      const cfg = await this.program.account.config.fetch(CONFIG);
+      const childMint = petMintPda(cfg.totalPets.toNumber());
+      try {
+        const sig = await this.program.methods
+          .breed(name)
+          .accountsPartial({
+            owner: this.owner,
+            partner: this.owner, // в интерфейсе оба родителя ваши; два игрока — см. тесты
+            config: CONFIG,
+            player: playerPda(this.owner),
+            parentA: petPda(ma),
+            parentAToken: this.petAccs(a).petToken,
+            parentB: petPda(mb),
+            parentBToken: this.petAccs(b).petToken,
+            foodMint: FOOD,
+            ownerFood: foodAta(this.owner),
+            childMint,
+            childToken: petAta(childMint, this.owner),
+            child: petPda(childMint),
+            tokenProgram: TOKEN_PROGRAM_ID,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
+          })
+          .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 })])
+          .rpc();
+        return { sig, newPetKey: petPda(childMint).toBase58() };
+      } catch (e) {
+        if (attempt === 0 && isIdRace(e)) continue;
+        throw humanError(e);
+      }
+    }
   }
 }

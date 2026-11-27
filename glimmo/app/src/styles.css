@@ -294,3 +294,70 @@ a.btn { text-decoration: none; flex-direction: row; }
   .topbar { gap: 10px; }
   .logo small { display: none; }
 }
+
+/* --- второй проход: новые элементы --- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; border-radius: 12px; }
+.app { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.mode-link { padding: 7px 16px; border-radius: 999px; font-weight: 700; color: var(--muted); text-decoration: none; }
+.pet-name:disabled { cursor: default; }
+.pet-holder { background: none; border: 0; padding: 0; cursor: pointer; border-radius: 50%; }
+.pet-holder:disabled { cursor: default; }
+.pat-hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--muted); opacity: 0.7; z-index: 3; pointer-events: none; }
+.react-pat .pet-holder { animation: pat 0.6s ease; }
+@keyframes pat { 30% { transform: rotate(-6deg) scale(1.04, 0.96); } 60% { transform: rotate(5deg); } }
+.care-chips { position: absolute; top: 18px; left: 18px; z-index: 3; display: flex; gap: 6px; flex-wrap: wrap; max-width: 60%; }
+.care-chip { padding: 6px 10px; border-radius: 12px; font-weight: 800; font-size: 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--panel-b); backdrop-filter: blur(6px); }
+.hint { text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.floats { position: absolute; inset: 0; pointer-events: none; z-index: 6; display: grid; place-items: center; }
+.float-num { grid-area: 1 / 1; font-family: "Unbounded", sans-serif; font-weight: 900; font-size: 22px; color: white; text-shadow: 0 0 16px currentColor, 0 2px 4px black; animation: floatUp 1.5s ease-out forwards; }
+.f-food { color: var(--amber); }
+.f-xp { color: var(--cyan); }
+.f-streak { color: #ff9a3d; font-size: 26px; }
+@keyframes floatUp { 0% { transform: translateY(0) scale(0.6); opacity: 0; } 15% { transform: translateY(-20px) scale(1.15); opacity: 1; } 100% { transform: translateY(-120px) scale(1); opacity: 0; } }
+.banner-slot { position: absolute; inset: auto 0 34px; display: grid; place-items: center; z-index: 5; pointer-events: none; }
+.banner-slot .banner { position: static; }
+/* вспышка при вылуплении */
+.stage::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, white, rgba(255, 255, 255, 0) 70%); opacity: 0; pointer-events: none; z-index: 7; }
+.stage.flash::after { animation: hatchFlash 1.1s ease-out; }
+.stage.flash .pet-holder { animation: popIn 0.9s cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes hatchFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes popIn { 0% { transform: scale(0.2); } 100% { transform: scale(1); } }
+/* фон сцены меняется со стадией */
+.stage.stage-s2 { background: radial-gradient(circle at 50% 42%, rgba(94, 242, 255, 0.3), transparent 55%), linear-gradient(180deg, rgba(14, 30, 70, 0.7), rgba(8, 10, 34, 0.9)); }
+.stage.stage-s3 { background: radial-gradient(circle at 50% 42%, rgba(255, 106, 213, 0.32), transparent 55%), radial-gradient(circle at 80% 20%, rgba(255, 233, 122, 0.15), transparent 40%), linear-gradient(180deg, rgba(40, 14, 70, 0.7), rgba(12, 6, 30, 0.92)); }
+.pet-svg .halo { animation: auraPulse 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.pet-svg.is-grumpy { filter: saturate(0.75); }
+/* редкость */
+.r-common { color: var(--muted); }
+.r-rare { color: #7af0ff; border-color: rgba(122, 240, 255, 0.5); }
+.r-epic { color: #d79dff; border-color: rgba(215, 157, 255, 0.6); box-shadow: 0 0 12px rgba(215, 157, 255, 0.35); }
+.r-myth { color: #241a00; background: linear-gradient(90deg, #ffe97a, #ff9df0); border: 0; box-shadow: 0 0 16px rgba(255, 233, 122, 0.5); }
+.form-1 { color: #ffe97a; }
+.form-3 { color: #ffb08a; }
+/* ДНК яйца */
+.dna-unknown i { background: rgba(255, 255, 255, 0.12); animation: dnaPulse 1.4s ease-in-out infinite; }
+@keyframes dnaPulse { 50% { background: rgba(157, 122, 255, 0.5); } }
+/* рейтинг */
+.board ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.board li button { width: 100%; display: grid; grid-template-columns: 22px 34px 1fr auto; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid transparent; text-align: left; cursor: default; }
+.board li.me button { border-color: var(--violet); background: rgba(157, 122, 255, 0.14); cursor: pointer; }
+.board .place { font-family: "Unbounded"; font-weight: 900; color: var(--muted); text-align: center; }
+.board li:nth-child(1) .place { color: #ffe97a; }
+.board li:nth-child(2) .place { color: #dfe6ff; }
+.board li:nth-child(3) .place { color: #ffb08a; }
+.board .b-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board .b-score { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--cyan); }
+.help { padding-left: 20px; display: grid; gap: 10px; font-size: 14px; line-height: 1.45; }
+.btn-hatch { animation: hatchGlow 1.2s ease-in-out infinite; }
+@keyframes hatchGlow { 50% { box-shadow: 0 0 34px rgba(255, 207, 90, 0.9); filter: brightness(1.15); } }
+.xp-bar i { transition: width 0.8s; }
+@media (max-width: 760px) {
+  .care-chips { top: 12px; left: 12px; }
+  .mood-bubble { top: auto; bottom: 34px; right: 12px; }
+  .float-num { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .banner { animation: fade 0.3s both !important; }
+  .float-num { animation: fade 0.3s both !important; }
+}

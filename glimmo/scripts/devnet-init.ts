@@ -20,6 +20,7 @@ const params = {
   xpPerLevel: 20,
   teenLevel: 3,
   adultLevel: 5,
+  carePeriod: new BN(3600), // «день заботы» = 1 час, чтобы серию было видно на показе
 };
 
 async function main() {
@@ -30,6 +31,11 @@ async function main() {
   const config = pda("config");
   const treasury = pda("treasury");
   const foodMint = pda("food");
+  // initialize разрешён только upgrade authority программы: передаём её ProgramData
+  const programData = PublicKey.findProgramAddressSync(
+    [program.programId.toBuffer()],
+    new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111")
+  )[0];
 
   const existing = await program.account.config.fetchNullable(config);
   let sig: string;
@@ -37,7 +43,7 @@ async function main() {
     sig = await program.methods.updateParams(params).accountsPartial({ admin: provider.wallet.publicKey, config }).rpc();
     console.log("Игра уже создана — параметры обновлены:", sig);
   } else {
-    sig = await program.methods.initialize(params).accountsPartial({ admin: provider.wallet.publicKey, config, treasury, foodMint }).rpc();
+    sig = await program.methods.initialize(params).accountsPartial({ admin: provider.wallet.publicKey, config, treasury, foodMint, programData }).rpc();
     console.log("Игра создана:", sig);
   }
 

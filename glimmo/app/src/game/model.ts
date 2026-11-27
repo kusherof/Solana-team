@@ -1,5 +1,5 @@
 // Общая модель игры: одинаковая для демо-режима и для devnet.
-// Формулы повторяют программу (programs/glimmo/src/state.rs).
+// Формулы повторяют программу (programs/glimmo/src/state.rs, genes.rs).
 
 export type Params = {
   eggPrice: number; // лампорты
@@ -13,14 +13,17 @@ export type Params = {
   xpPerLevel: number;
   teenLevel: number;
   adultLevel: number;
+  carePeriod: number;
 };
 
 export type Pet = {
   key: string; // адрес PDA Pet
   mint: string; // NFT
+  tokenAccount?: string; // где лежит NFT (devnet)
   id: number;
   name: string;
   dna: number[];
+  dnaB: number[];
   generation: number;
   parentA: string | null;
   parentB: string | null;
@@ -37,6 +40,12 @@ export type Pet = {
   timesFed: number;
   timesPlayed: number;
   children: number;
+  bond: number;
+  streak: number;
+  lastCarePeriod: number;
+  careMistakes: number;
+  form: number;
+  owner?: string; // для рейтинга
 };
 
 export type GameState = {
@@ -46,6 +55,7 @@ export type GameState = {
   params: Params;
   lastFoodClaim: number; // 0 = ещё не брал
   totalPets: number;
+  hasPlayer: boolean; // кормушка открыта только хозяевам питомцев
 };
 
 export type TxResult = { sig?: string; message?: string; newPetKey?: string };
@@ -53,6 +63,7 @@ export type TxResult = { sig?: string; message?: string; newPetKey?: string };
 export interface Backend {
   kind: "demo" | "chain";
   load(): Promise<GameState>;
+  leaderboard(): Promise<Pet[]>;
   claimFood(): Promise<TxResult>;
   adopt(name: string): Promise<TxResult>;
   hatch(pet: Pet): Promise<TxResult>;
@@ -70,11 +81,23 @@ export const PLAY_SATIETY_COST = 8;
 export const PLAY_XP = 30;
 export const MIN_SATIETY_TO_PLAY = 10;
 export const MIN_SATIETY_TO_BREED = 30;
+export const MIN_MOOD_TO_BREED = 30;
+export const BREED_SATIETY_COST = 20;
+export const BREED_MOOD_COST = 10;
+export const MAX_CHILDREN = 5;
+export const BOND_PER_NEW_DAY = 5;
+export const BOND_DECAY_PER_MISSED = 3;
+export const HATCH_SATIETY = 80;
+export const HATCH_MOOD = 80;
 
 export type Stage = 0 | 1 | 2 | 3; // яйцо, малыш, подросток, взрослый
 export const STAGE_NAMES = ["Яйцо", "Малыш", "Подросток", "Взрослый"];
+export const FORM_NAMES = ["", "Сияющий облик", "Обычный облик", "Ворчливый облик"];
 
-export const now = () => Math.floor(Date.now() / 1000);
+/** Сдвиг часов блокчейна относительно браузера (сек), задаётся в режиме devnet. */
+let clockOffset = 0;
+export const setClockOffset = (s: number) => (clockOffset = s);
+export const now = () => Math.floor(Date.now() / 1000) + clockOffset;
 
 export function stageOf(p: Pet, params: Params): Stage {
   if (!p.hatched) return 0;
@@ -96,11 +119,42 @@ export function withDecay(p: Pet, params: Params, t = now()): Pet {
     lastTick: p.lastTick + ticks * params.decaySeconds,
     satiety: p.satiety - fed,
     mood: Math.max(0, p.mood - Math.min(255, fed + hungry * 2)),
+    careMistakes: hungry > 0 ? Math.min(255, p.careMistakes + 1) : p.careMistakes,
   };
 }
 
-export function addXp(p: Pet, xp: number, params: Params): { pet: Pet; ups: number[] } {
-  const q = { ...p, xp: p.xp + xp };
+/** Серия «дней заботы» и привязанность (как touch_care). */
+export function touchCare(p: Pet, params: Params, t = now()): Pet {
+  const q = { ...p };
+  const period = Math.floor(t / params.carePeriod);
+  if (q.lastCarePeriod === 0 || period > q.lastCarePeriod + 1) {
+    if (q.lastCarePeriod !== 0) {
+      const missed = Math.min(1000, period - q.lastCarePeriod - 1);
+      q.bond = Math.max(0, q.bond - missed * BOND_DECAY_PER_MISSED);
+    }
+    q.streak = 1;
+    q.bond += BOND_PER_NEW_DAY;
+  } else if (period === q.lastCarePeriod + 1) {
+    q.streak += 1;
+    q.bond += BOND_PER_NEW_DAY + Math.floor(q.streak / 3);
+  }
+  q.lastCarePeriod = period;
+  q.bond += 1;
+  return q;
+}
+
+/** Множитель опыта в процентах: настроение и серия (как xp_multiplier). */
+export const xpMultiplier = (p: Pet) =>
+  Math.floor(((50 + p.mood) * (100 + Math.min(p.streak, 10) * 5)) / 150);
+
+export function adultForm(p: Pet) {
+  return p.careMistakes <= 1 ? 1 : p.careMistakes <= 4 ? 2 : 3;
+}
+
+export function addXp(p: Pet, baseXp: number, params: Params): { pet: Pet; ups: number[]; gained: number } {
+  const gained = Math.floor((baseXp * xpMultiplier(p)) / 100);
+  const before = stageOf(p, params);
+  const q = { ...p, xp: p.xp + gained };
   const ups: number[] = [];
   while (q.level < 99) {
     const need = params.xpPerLevel * q.level;
@@ -109,10 +163,37 @@ export function addXp(p: Pet, xp: number, params: Params): { pet: Pet; ups: numb
     q.level += 1;
     ups.push(q.level);
   }
-  return { pet: q, ups };
+  if (stageOf(q, params) === 3 && before !== 3 && q.form === 0) q.form = adultForm(q);
+  return { pet: q, ups, gained };
 }
 
 export const xpNeed = (p: Pet, params: Params) => params.xpPerLevel * Math.max(1, p.level);
+
+/** Сколько FOOD питомец реально съест (как food_eaten). */
+export const foodEaten = (satiety: number, amount: number) =>
+  Math.min(amount, Math.ceil((100 - Math.min(100, satiety)) / SATIETY_PER_FOOD));
+
+export const breedCooldown = (params: Params, children: number) =>
+  params.breedCooldown * 2 ** Math.min(children, 4);
+export const breedCost = (params: Params, a: Pet, b: Pet) =>
+  params.breedFoodCost * (1 + Math.max(a.children, b.children));
+/** Сколько ждать до следующего скрещивания этого питомца. */
+export const breedWait = (p: Pet, params: Params, t = now()) =>
+  p.lastBreed ? Math.max(0, p.lastBreed + breedCooldown(params, Math.max(0, p.children - 1)) - t) : 0;
+export const related = (a: Pet, b: Pet) =>
+  a.parentA === b.key || a.parentB === b.key || b.parentA === a.key || b.parentB === a.key;
+
+/** Имя: 1–20 символов без пробелов по краям и управляющих, ≤ 40 байт. */
+export function nameOk(name: string): boolean {
+  const chars = [...name].length;
+  return (
+    chars >= 1 &&
+    chars <= 20 &&
+    new TextEncoder().encode(name).length <= 40 &&
+    name.trim() === name &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(name)
+  );
+}
 
 // ---------- Гены → внешность ----------
 
@@ -150,28 +231,63 @@ export function traits(dna: number[]): Traits {
   };
 }
 
-/** Похоже на mix_dna в программе (для демо-режима). */
-export function mixDna(a: number[], b: number[], rnd: number[]): { dna: number[]; mutations: number } {
+// Редкость: насколько редки черты. Взвешиваем самые «необычные» варианты.
+const RARE = {
+  body: [0, 1, 2, 6],
+  pattern: [0, 2, 3, 4],
+  eyes: [0, 2, 5, 8],
+  horns: [0, 2, 4, 5],
+  tail: [0, 3, 3],
+};
+export const RARITY_TIERS = [
+  { min: 0, name: "Обычный", cls: "r-common" },
+  { min: 12, name: "Редкий", cls: "r-rare" },
+  { min: 20, name: "Эпический", cls: "r-epic" },
+  { min: 30, name: "Мифический", cls: "r-myth" },
+];
+export function rarityScore(dna: number[]): number {
+  const t = traits(dna);
+  return RARE.body[t.body] + RARE.pattern[t.pattern] + RARE.eyes[t.eyes] + RARE.horns[t.horns] + RARE.tail[t.tail] + (t.shiny ? 15 : 0);
+}
+export const rarityTier = (score: number) => [...RARITY_TIERS].reverse().find((r) => score >= r.min)!;
+/** Общий счёт для рейтинга: редкость + уровень + привязанность + поколение. */
+export const powerScore = (p: Pet) => rarityScore(p.dna) * 10 + p.level * 15 + p.bond + p.generation * 20;
+
+/** Как mix_dna в программе: второй хеш решает мутации, сияние бросается заново. */
+export function mixDna(a: number[], b: number[], rnd: number[], r2: number[]): { dna: number[]; mutations: number } {
   const child: number[] = [];
   let mutations = 0;
   for (let i = 0; i < 32; i++) {
     const fromA = ((rnd[i >> 3] >> (i % 8)) & 1) === 1;
     child[i] = fromA ? a[i] : b[i];
-    if (i < 8 && rnd[16 + (i % 16)] % 8 === 0) {
-      child[i] = rnd[(i * 7 + 3) % 32];
+    if (i < 8 && i !== 6 && r2[i] % 8 === 0) {
+      child[i] = r2[i + 8];
       mutations++;
     }
   }
+  const chance = a[6] < 13 && b[6] < 13 ? 64 : 13;
+  const roll = r2[31];
+  child[6] = roll < chance ? roll % 13 : 13 + (roll % 242);
   return { dna: child, mutations };
 }
 
 export const randomBytes = (n = 32) => Array.from(crypto.getRandomValues(new Uint8Array(n)));
 
+/** Пока яйцо не вылупилось, цвет скорлупы — от адреса mint (ДНК ещё нет). */
+export function eggDna(p: Pet): number[] {
+  if (p.dna.some((x) => x !== 0)) return p.dna;
+  const out: number[] = [];
+  for (let i = 0; i < 32; i++) out.push(p.mint.charCodeAt(i % p.mint.length) * (i + 7) % 256);
+  return out;
+}
+
 export function fmtDuration(s: number): string {
   if (s <= 0) return "готово";
-  const h = Math.floor(s / 3600);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
+  if (d > 0) return `${d} д ${h} ч`;
   if (h > 0) return `${h} ч ${m} мин`;
   if (m > 0) return `${m}:${String(sec).padStart(2, "0")}`;
   return `${sec} с`;
