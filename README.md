@@ -11,6 +11,7 @@
 | [week6-pda-profile](week6-pda-profile) | 6 | Профиль на PDA |
 | [week7-spl-token](week7-spl-token) | 7 | Token-2022: mint, transfer, metadata |
 | [week8-15-liquidity-vault](week8-15-liquidity-vault) | 8–15 | Сквозной проект Liquidity Vault: vault на PDA, share-токены, депозит/вывод через CPI, swap и позиции Raydium CLMM, веб-интерфейс, Demo Day |
+| [glimmo](glimmo) | демо | **Glimmo**: игра с питомцами-NFT на Token-2022, едой FOOD, ростом по времени и скрещиванием генов, веб-игра с Phantom |
 
 Как проверять: [КАК-ПРОВЕРИТЬ.md](КАК-ПРОВЕРИТЬ.md)
 
