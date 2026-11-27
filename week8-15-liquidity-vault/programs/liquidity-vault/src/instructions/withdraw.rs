@@ -55,6 +55,12 @@ pub struct Withdraw<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+/// «Вывести всё»: сжечь все share-токены пользователя за один вызов.
+pub fn withdraw_all_handler(ctx: Context<Withdraw>) -> Result<()> {
+    let shares = ctx.accounts.user_share.amount;
+    handler(ctx, shares)
+}
+
 pub fn handler(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
     require!(shares > 0, VaultError::ZeroAmount);
     assert_idle(&ctx.accounts.vault, &ctx.accounts.vault_b)?;

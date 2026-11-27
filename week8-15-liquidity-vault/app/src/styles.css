@@ -62,3 +62,12 @@ code { background: #0f1117; padding: 1px 5px; border-radius: 5px; }
 @media (max-width: 520px) {
   .grid { grid-template-columns: 1fr; }
 }
+
+/* История операций */
+table.history { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.history th, table.history td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+table.history th { font-weight: 500; opacity: 0.7; }
+table.history tr.failed td { opacity: 0.5; text-decoration: line-through; }
+@media (max-width: 640px) {
+  table.history th:nth-child(1), table.history td:nth-child(1) { display: none; }
+}

@@ -17,7 +17,7 @@ pub mod state;
 
 use instructions::*;
 
-declare_id!("CY1oWHjzFTWDrzKq1JwyWMcJtN5T1LhuC9o2YyNnHRqK");
+declare_id!("96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU");
 
 #[program]
 pub mod liquidity_vault {
@@ -43,6 +43,16 @@ pub mod liquidity_vault {
     /// Неделя 10. Сжечь share-токены и забрать свою долю токенов A.
     pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
         instructions::withdraw::handler(ctx, shares)
+    }
+
+    /// Неделя 10 (практика). Вывести всё: сжечь все share-токены пользователя за один вызов.
+    pub fn withdraw_all(ctx: Context<Withdraw>) -> Result<()> {
+        instructions::withdraw::withdraw_all_handler(ctx)
+    }
+
+    /// Неделя 10 (практика). Закрыть пустую карточку и вернуть ренту пользователю.
+    pub fn close_user_account(ctx: Context<CloseUserAccount>) -> Result<()> {
+        instructions::close_user_account::handler(ctx)
     }
 
     /// Неделя 12. Привязать CLMM-пул Raydium и создать хранилище токена B (только админ).
@@ -99,5 +109,15 @@ pub mod liquidity_vault {
         amount_1_min: u64,
     ) -> Result<()> {
         instructions::manage_position::close_position_handler(ctx, amount_0_min, amount_1_min)
+    }
+
+    /// Неделя 13 (практика). Доложить свободные токены vault (например, комиссии) в открытую позицию.
+    pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ManagePosition<'info>>,
+        liquidity: u128,
+        amount_0_max: u64,
+        amount_1_max: u64,
+    ) -> Result<()> {
+        instructions::manage_position::increase_liquidity_handler(ctx, liquidity, amount_0_max, amount_1_max)
     }
 }

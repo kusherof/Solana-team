@@ -24,7 +24,8 @@
 9. [Веб-интерфейс](#веб-интерфейс)
 10. [Тесты](#тесты)
 11. [Структура проекта](#структура-проекта)
-12. [Ограничения учебной версии и что дальше](#ограничения-учебной-версии-и-что-дальше)
+12. [Задания для практики из методички](#задания-для-практики-из-методички)
+13. [Ограничения учебной версии и что дальше](#ограничения-учебной-версии-и-что-дальше)
 
 ---
 
@@ -38,7 +39,7 @@
 | 11 | AMM и CLMM | `scripts/devnet/01-setup-pool.ts`: свои токены, свой CLMM-пул Raydium, своя позиция вручную |
 | 12 | Swap через Raydium | `configure_pool` (второе хранилище) и `swap` через CPI в Raydium `swap_v2` с минимумом (защита от slippage) |
 | 13 | Позиция в CLMM | `open_position`, `collect_fees`, `close_position` через CPI в Raydium. Ребалансировка в тестах |
-| 14 | Capstone | Веб-интерфейс `app/` (кошелёк, внести/вывести, страница админа), README, devnet-скрипты |
+| 14 | Capstone | Веб-интерфейс `app/`: кошелёк, карточка, внести/вывести с подсказкой «получите ≈», проверка ввода, понятные ошибки, история операций, мгновенное обновление, страница админа. `npm run faucet` для тестеров, тесты сайта (vitest) |
 | 15 · РК2 | Demo Day | Живое демо через веб-интерфейс: внести → обмен → позиция → комиссии → закрыть → вывести |
 
 ---
@@ -105,12 +106,15 @@ Raydium при открытии позиции списывает с «плат�
 |---|---|---|
 | `initialize_vault(authority_lamports)` | админ | Создаёт Vault, share_mint, vault_a и пополняет vault_authority SOL-ом |
 | `open_user_account()` | пользователь | Создаёт карточку пользователя |
-| `deposit(amount)` | пользователь | Токены A → vault_a, share-токены → пользователю |
+| `deposit(amount)` | пользователь | Токены A → vault_a, share-токены → пользователю. Минимум 1 токен (`DepositTooSmall`) |
 | `withdraw(shares)` | пользователь | Сжигает share, токены A → пользователю |
+| `withdraw_all()` | пользователь | То же, что `withdraw`, но сжигает все share пользователя за один вызов |
+| `close_user_account()` | пользователь | Закрывает карточку, если share не осталось (`CardNotEmpty`), рента возвращается пользователю |
 | `configure_pool()` | админ | Привязывает CLMM-пул (проверяет, что в нём токен A) и создаёт vault_b |
-| `swap(amount_in, minimum_amount_out, sqrt_price_limit_x64, a_to_b)` | админ | CPI в Raydium `swap_v2` |
+| `swap(amount_in, minimum_amount_out, sqrt_price_limit_x64, a_to_b)` | админ | CPI в Raydium `swap_v2`. A → B не больше 50% токена A vault за раз (`SwapTooLarge`) |
 | `open_position(tick_lower, tick_upper, …, liquidity, amount_0_max, amount_1_max)` | админ | CPI в Raydium `open_position_with_token22_nft`, NFT достаётся vault_authority |
 | `collect_fees()` | админ | CPI в Raydium `decrease_liquidity_v2` с ликвидностью 0: забирает только комиссии |
+| `increase_liquidity(liquidity, amount_0_max, amount_1_max)` | админ | CPI `increase_liquidity_v2`: доложить свободные токены vault (например, собранные комиссии) в открытую позицию |
 | `close_position(amount_0_min, amount_1_min)` | админ | CPI `decrease_liquidity_v2` (вся ликвидность) + CPI `close_position` (сжечь NFT) |
 
 Все «админские» инструкции проверяют `has_one = admin`. Подпись чужого кошелька даёт ошибку `Unauthorized`.
@@ -182,7 +186,7 @@ Raydium при открытии позиции списывает с «плат�
 
 `swap` вызывает `swap_v2` с `is_base_input = true`: точная сумма на входе и `minimum_amount_out` на выходе.
 Ожидаемую сумму клиент узнаёт **симуляцией той же транзакции** (`.simulate()`, читаем событие `SwapEvent`) и ставит минимум на 1% ниже.
-Если пул отдаёт меньше минимума, Raydium откатывает всю транзакцию с ошибкой `TooLittleOutputReceived` (код 6022).
+Если пул отдаёт меньше минимума, Raydium откатывает всю транзакцию с ошибкой `TooLittleOutputReceived` (код 6018).
 
 ### Позиция
 
@@ -222,8 +226,10 @@ npm test
 
 `npm test` запускает `scripts/test-local.sh`: собирает программу, поднимает `solana-test-validator` с нашей программой и Raydium и запускает `anchor test`.
 
-> **Свой Program ID.** Ключ программы не хранится в репозитории. После первой сборки выполните
-> `anchor keys sync`: он запишет адрес из `target/deploy/liquidity_vault-keypair.json` в `declare_id!` и `Anchor.toml`. Затем пересоберите.
+> **Program ID.** В `declare_id!` и `Anchor.toml` записан адрес программы, задеплоенной в devnet (`96NuHq…`).
+> Локальные тесты загружают программу в валидатор по этому же адресу, ключ для этого не нужен.
+> Ключ программы в репозиторий не попадает. Если хотите задеплоить **свою** копию, выполните `anchor keys sync`
+> (он запишет адрес из `target/deploy/liquidity_vault-keypair.json`) и пересоберите.
 
 ### Деплой в devnet
 
@@ -232,6 +238,18 @@ solana config set --url devnet
 solana airdrop 2                      # или https://faucet.solana.com (нужно ~5 SOL на деплой)
 npm run build:devnet                  # сборка с адресом Raydium CLMM для devnet
 anchor deploy --provider.cluster devnet
+```
+
+### Обновить программу в devnet (после изменений в контракте)
+
+Программа обновляется по тому же адресу: нужен тот же `target/deploy/liquidity_vault-keypair.json`, что и при первом деплое.
+Новые инструкции не меняют формат аккаунтов, поэтому старый vault в devnet продолжает работать.
+
+```bash
+npm run build:devnet
+anchor deploy --provider.cluster devnet
+# если пишет «account data too small»: программа выросла, добавьте места и повторите деплой
+solana program extend 96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU 50000 --url devnet
 ```
 
 ### Сценарий в devnet (каждая команда печатает ссылку на Explorer и сохраняет её в `deployments/devnet.json`)
@@ -251,7 +269,16 @@ npm run vault -- close                # неделя 13: закрыть пози
 npm run vault -- swap b2a all         # вернуть весь B в A
 npm run vault -- withdraw 900         # вывести остаток
 npm run vault -- status               # состояние vault и пула
+
+# после обновления программы:
+npm run vault -- withdraw-all         # вывести все свои share одной транзакцией
+npm run vault -- close-card           # закрыть пустую карточку, вернуть ренту
+npm run vault -- increase             # (при открытой позиции) доложить собранные комиссии в позицию
+npm run faucet -- <адрес> [сумма]     # неделя 14: тестеру 1000 токенов A и 0.02 SOL, если у него меньше 0.01
 ```
+
+Все devnet-скрипты сначала проверяют, что RPC действительно devnet (по хешу первого блока): если в `ANCHOR_PROVIDER_URL`
+по ошибке указан mainnet, скрипт остановится до любой транзакции.
 
 Те же скрипты можно прогнать на локальном валидаторе: `CLUSTER=localnet npm run devnet:pool` и т.д.
 
@@ -259,23 +286,47 @@ npm run vault -- status               # состояние vault и пула
 
 ## Devnet: адреса и транзакции
 
-> Заполняется после деплоя. Все адреса и подписи транзакций скрипты сохраняют в [`deployments/devnet.json`](deployments/devnet.json).
-> Ссылка: `https://explorer.solana.com/address/<АДРЕС>?cluster=devnet` или `https://explorer.solana.com/tx/<ПОДПИСЬ>?cluster=devnet`.
+Программа развёрнута в devnet, весь сценарий из [`ЗАПУСК.md`](ЗАПУСК.md) пройден. Адреса и подписи транзакций лежат в [`deployments/devnet.json`](deployments/devnet.json).
 
-| Что | Адрес / транзакция |
+**Адреса**
+
+| Что | Адрес |
 |---|---|
-| Программа `liquidity_vault` | _после `anchor deploy`_ |
-| Токен A / токен B | _из `deployments/devnet.json`: `mintA`, `mintB`_ |
-| CLMM-пул Raydium | _`pool`_ |
-| Своя позиция (неделя 11) | _`ownPositionNft`_ |
-| Vault / vault_authority / share_mint | _`vault`, `vaultAuthority`, `shareMint`_ |
-| Хранилища vault_a / vault_b | _`vaultA`, `vaultB`_ |
-| Создание vault (нед. 8) | _`txs.initializeVault`_ |
-| Депозит (нед. 9) | _`txs.deposit`_ |
-| Вывод (нед. 10) | _`txs.withdraw`_ |
-| Обмен (нед. 12) | _`txs.swapAtoB`_ |
-| Обмен, отклонённый из-за slippage (нед. 12) | _`txs.swapRejectedBySlippage`_ |
-| Открытие / сбор комиссий / закрытие позиции (нед. 13) | _`txs.openPosition`, `txs.collectFees`, `txs.closePosition`_ |
+| Программа `liquidity_vault` | [`96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU`](https://explorer.solana.com/address/96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU?cluster=devnet) |
+| Raydium CLMM (devnet) | [`DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH`](https://explorer.solana.com/address/DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH?cluster=devnet) |
+| Админ (кошелёк) | [`6Php2APfxdt14DZG7Wruq2kPpRcjWpQkir5TX29nU3Kn`](https://explorer.solana.com/address/6Php2APfxdt14DZG7Wruq2kPpRcjWpQkir5TX29nU3Kn?cluster=devnet) |
+| Токен A | [`3EzwLJ6DsngqAqror8iZWzYeQe1fbGrtngCCDfeenpXq`](https://explorer.solana.com/address/3EzwLJ6DsngqAqror8iZWzYeQe1fbGrtngCCDfeenpXq?cluster=devnet) |
+| Токен B | [`CCWRbhSb8BYnuPureBfVCSLiAorPFpwKm7DGLwn4yZBU`](https://explorer.solana.com/address/CCWRbhSb8BYnuPureBfVCSLiAorPFpwKm7DGLwn4yZBU?cluster=devnet) |
+| AmmConfig (tickSpacing 60, комиссия 0.25%) | [`CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu`](https://explorer.solana.com/address/CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu?cluster=devnet) |
+| CLMM-пул Raydium | [`D69RAEuzoJZrjnyfvrR4L89Nu6oE8jN27dGKq4ftvDAA`](https://explorer.solana.com/address/D69RAEuzoJZrjnyfvrR4L89Nu6oE8jN27dGKq4ftvDAA?cluster=devnet) |
+| Своя позиция, NFT (нед. 11) | [`Bf6vDGqSdm5nDQUz98Kob7LMREvoE9RqSNA7c4Cy2qUW`](https://explorer.solana.com/address/Bf6vDGqSdm5nDQUz98Kob7LMREvoE9RqSNA7c4Cy2qUW?cluster=devnet) |
+| Vault | [`5Whod5S2vALvitfQf5pGzn9tvPwvsdh1Xuz9N4bp5vdv`](https://explorer.solana.com/address/5Whod5S2vALvitfQf5pGzn9tvPwvsdh1Xuz9N4bp5vdv?cluster=devnet) |
+| vault_authority | [`AvZSdTzWBDSqCrmara5tLGcEVQSdw56nMdQfjFYG8NYa`](https://explorer.solana.com/address/AvZSdTzWBDSqCrmara5tLGcEVQSdw56nMdQfjFYG8NYa?cluster=devnet) |
+| share_mint | [`2b92EVKgiWAdN3o3j5ye5MdkQ3VFYG6vfw7dvFjoJ7ag`](https://explorer.solana.com/address/2b92EVKgiWAdN3o3j5ye5MdkQ3VFYG6vfw7dvFjoJ7ag?cluster=devnet) |
+| Хранилище vault_a | [`5yK7bNvLhSFQZYx11aF91SS15qcnvJSNfZWsrRgBucT3`](https://explorer.solana.com/address/5yK7bNvLhSFQZYx11aF91SS15qcnvJSNfZWsrRgBucT3?cluster=devnet) |
+| Хранилище vault_b | [`Gj3kFUu6eRWDVNKAthVpxVbWpvt8wTS31BgzJADbhy8m`](https://explorer.solana.com/address/Gj3kFUu6eRWDVNKAthVpxVbWpvt8wTS31BgzJADbhy8m?cluster=devnet) |
+
+**Транзакции** (в порядке выполнения)
+
+| # | Шаг | Транзакция | Результат |
+|---|---|---|---|
+| 1 | Создание пула (нед. 11) | [TezJ838Z…](https://explorer.solana.com/tx/TezJ838Z3fHkAFzfUK7X7SvayLo74Tq5pKRuo6HZDEcuydGwpLaNpxyAUwj5shNVqdKDQnL5ahazpgjscp36UUR?cluster=devnet) | начальная цена 1 B за 1 A |
+| 2 | Своя позиция (нед. 11) | [5qDtwVqh…](https://explorer.solana.com/tx/5qDtwVqhGLYpnF7zH7RQdQ3uCoayAs5aYmzZYRasDoM1dA6A7d9Ti5qv3S9ZzP9gPVPjHnEcyH8ynn7vg7rUdoxf?cluster=devnet) | тики [−1080, 960] = 0.8976 … 1.1008 |
+| 3 | Создание vault (нед. 8) | [4Kwajkii…](https://explorer.solana.com/tx/4KwajkiiDckqTPwAddWLCpjVsgkxmL8VMSkB5bP8u3AfpEbJgTzn9N4JsDaaQmrB3GTDB3BcWTftX9VeysXRLapA?cluster=devnet) | |
+| 4 | Карточка пользователя (нед. 8) | [HXYmqVw9…](https://explorer.solana.com/tx/HXYmqVw9NaWbYtsfq6NTLErkpJkEgcFueYrbJvEnC5HjY5GJVL5Aj9Xw1FJJ3DowGcLHxurmsvj6gHLF3QWRGsZ?cluster=devnet) | |
+| 5 | Депозит 1000 A (нед. 9) | [5ubKiBLe…](https://explorer.solana.com/tx/5ubKiBLecmUFYQd2pBoRKNPwXo5r5K9EUpe8JuYVkNfWfLtr4aiCqBytHv9MymM2dJKWcouUgstW8QvfBm2LFXX4?cluster=devnet) | выпущено 1000 share |
+| 6 | Вывод 100 share (нед. 10) | [5dVHNQaH…](https://explorer.solana.com/tx/5dVHNQaHH2SPaR63bN2UQmDPeaZrJhizrVwaxQ9Lk9jEbEbrDPkvbroHK3DmZtp9zw5gPsPCVuasmeAmNHan9cc6?cluster=devnet) | в vault осталось 900 A |
+| 7 | Привязка пула (нед. 12) | [4CV81dxZ…](https://explorer.solana.com/tx/4CV81dxZxNpnA3EZata36vFqLvByciqN2XB6S3VmW7GGSCpLGWLPGZcpgXpEtG5VExasa6i79sChsNKSypeUFLjV?cluster=devnet) | |
+| 8 | Обмен 450 A → B (нед. 12) | [5TVhsawb…](https://explorer.solana.com/tx/5TVhsawbNJ7Eu4Su5iXT9HU9FS9CWhZsGRHVtTMsjBPg295Pzxu82hHRuvLsd2qtRsbfpn6yPLsHUQnD7giL8s6x?cluster=devnet) | получено 447.81 B (минимум 443.33), тик 0 → −48 |
+| 9 | Обмен с минимумом +50% (нед. 12) | [cYPxXZGq…](https://explorer.solana.com/tx/cYPxXZGq7KPSa6DmeGpD42WxfJ6bi9fVw7CNEby8m9srZKkDM8vAZWRNHiKehAgzxQ1yaceihASr9VYMgH4TBH1?cluster=devnet) | отклонён: `TooLittleOutputReceived` (6018), цена не изменилась |
+| 10 | Открытие позиции (нед. 13) | [foAB6VEa…](https://explorer.solana.com/tx/foAB6VEa3kbUXQSn2qS9aTztAYQ59oF8rz8md2kJ6pbCGqbdPYWsYAo97RoJP2CBjunZRWN1y5g4VVyAG1kcJw2?cluster=devnet) | тики [−1140, 960] = 0.8923 … 1.1008, NFT [`33xUGni3wtNnVBitS43hqpUt7bLGeQh8aikyyP9iVDn6`](https://explorer.solana.com/address/33xUGni3wtNnVBitS43hqpUt7bLGeQh8aikyyP9iVDn6?cluster=devnet) |
+| 11 | 8 обменов трейдера по 200 | [1](https://explorer.solana.com/tx/32JH5zhEzJ6eXFeUsxgRz3D3xtSfVTKmSDxm7kYeZVN4VaWDyM2ghx9i3f2nXNCb4NKc8z6SJgTFf4N1T3Q57VF?cluster=devnet) · [2](https://explorer.solana.com/tx/2V3UMD6jDVfVUQpLHyE3xcueyA9Jjae2YjyyGbcgJpykAGRDHd7jhDbuBo9CyTgdvKVt3PbM64Kd7idBRNmYggN8?cluster=devnet) · [3](https://explorer.solana.com/tx/37E2TFRbY3aNfozEY3hbKCiuny2nuMQtEHwQ4Rai2bVhTqaVKh1D5R97G8RHR7q6AgmcXhqCrsdgz5btSArZrEvg?cluster=devnet) · [4](https://explorer.solana.com/tx/38hQZPbJZr3cEbJ4YgikFaNdheqHqqp5iHP6ipRfSvpZput2LBKmiq6y1NCEopXhb1mYGpn1Gq2XwxXeeXp8sy3G?cluster=devnet) · [5](https://explorer.solana.com/tx/5YhUWEyNCyj63Szwrq5dyxrz8bRYjG7EwiKUGiY8XTKtwhNihLRTiZGgkcLSnjzrENnhCCyFLnLHTejGr4xSgBLD?cluster=devnet) · [6](https://explorer.solana.com/tx/4TQXpcjshJZbMmUPAvx8kTJbCT92nEeipuXVAk7x818ok6JyhVHdQVs58GZ6BKeBGoJZoWQF8ZGneBzDTbqyhdfX?cluster=devnet) · [7](https://explorer.solana.com/tx/3nNdtZ53x1rQ7d15JNDvaH5YvxU7eFeemGvV3hRdyYLfs26jzVAic3rwWQhkPHZ2baSwXMCFmVZUBhYgwup6DeQM?cluster=devnet) · [8](https://explorer.solana.com/tx/2Bbdk112wVKKEcDcd3RvwZz8vc2igKcrcctCdfjMyJwycnER17oPWvFJM2DzaL9aZMb84HQAzgV3T8icfDfk6D1c?cluster=devnet) | |
+| 12 | Сбор комиссий (нед. 13) | [Wudj9yNr…](https://explorer.solana.com/tx/Wudj9yNreCvKgvRTL1ejwA7HuGPemstHpubodNohUKhBurTrgJu18Rz6nTUVdSDE2dDDwv2jaPWj4NwHdcQSYGF?cluster=devnet) | комиссии: 0.070717 A + 0.070717 B |
+| 13 | Закрытие позиции (нед. 13) | [5Sc18DrP…](https://explorer.solana.com/tx/5Sc18DrPtE27XYn83raHmsa13vKcw45TDntZzFSbAm5R2hRMv41zdHV4mX3Q75zCr2VZQUjMxywrx6XAZu1CseFn?cluster=devnet) | вернулось 407.39 A + 439.04 B |
+| 14 | Обмен всего B → A (нед. 12) | [4GGroYjD…](https://explorer.solana.com/tx/4GGroYjDLttW6R9qPoNu344e9F4tAZCB7rtht35v5ZEQm8wQfVb4NtRdeQrEQYuWEaWuxqeTpd9MwBnwPVEBjGGt?cluster=devnet) | тик −48 → 0, в vault 897.87 A, цена share 0.9976 A |
+| 15 | Вывод оставшихся 900 share (нед. 10) | [2rgdiCRo…](https://explorer.solana.com/tx/2rgdiCRoP49xTS4gVzqrt891AJDohURKtyQ7vh5Fy5WzjMtBvdVixaaVfbmC4V3q4pzhnt84qE5eZ8xEXpURFhPM?cluster=devnet) | vault пуст |
+
+Итог: внесено 1000 A, выведено 100 + 897.87 A. Разница ≈ 2.13 A: комиссии пула за два обмена vault (0.25% с 450 A и с ~447 B) и потери от сдвига цены; заработанные комиссии позиции (≈ 0.07 A + 0.07 B) их не перекрыли, потому что трейдер сделал всего 8 обменов.
 
 **Пул (неделя 11).** Начальная цена 1 B за 1 A (оба токена учебные, 6 decimals).
 Своя позиция в диапазоне **±10%** (≈ 0.90 … 1.10): для пары без внешнего рынка этого хватает, чтобы учебные обмены не выталкивали цену из диапазона,
@@ -301,12 +352,44 @@ npm run vault -- status               # состояние vault и пула
 cd app
 npm install
 npm run dev            # http://localhost:5173, адреса берутся из ../deployments/devnet.json
+npm test               # тесты сайта (формулы, суммы, проверка ввода, ошибки, история) без сети
 ```
 
-- **Пользователь:** баланс токена A и share-токенов, доля в vault, сколько всего в vault, кнопки «Открыть карточку», «Внести», «Вывести»,
-  статус каждой транзакции со ссылкой на Explorer.
-- **Администратор:** привязать пул, обмен с выбором slippage и предпросмотром курса, открыть позицию ±N%, собрать комиссии, закрыть позицию.
-  Страница проверяет, что подключён кошелёк админа (программа всё равно проверяет это on-chain).
+**Пользователь:**
+1. Подключает Phantom (Testnet Mode → Solana Devnet). Без Phantom в `npm run dev` есть «Тестовый кошелёк (dev)»:
+   ключ создаётся сам и хранится в localStorage браузера. Держите на нём только devnet-токены.
+2. Видит SOL, токен A, share-токены, долю в vault и сколько стоят его share.
+   Если SOL или токенов нет, сайт показывает готовую команду `npm run faucet -- <адрес>` для админа.
+3. «Открыть карточку» → «Внести» → «Вывести» или «Вывести всё». Пустую карточку можно закрыть и вернуть ренту.
+4. До отправки видно, сколько он получит («Получите ≈ 100,5 share»). Кнопка выключена, если сумма больше баланса,
+   меньше минимального депозита или за неё выйдет 0 share/токенов, и рядом написано почему.
+5. Пока средства vault в Raydium, внесение и вывод выключены, и сайт объясняет почему.
+6. Ошибки контракта, Raydium, кошелька и сети показываются понятным текстом с подсказкой «что делать» (`app/src/lib/errors.ts`).
+7. **История операций**: `getSignaturesForAddress` для карточки (PDA) + события `DepositEvent` / `WithdrawEvent` из логов.
+
+**Администратор:** привязать пул, обмен с выбором slippage и предпросмотром курса (кнопка «Макс (50%)»), открыть позицию ±N%,
+собрать комиссии, доложить свободные токены в позицию, закрыть позицию. Вкладка видна всем, но кнопки работают только
+у кошелька админа (программа всё равно проверяет это on-chain).
+
+**Как сайт говорит с контрактом:**
+
+```
+браузер ── Phantom подписывает ──► транзакция ──► devnet RPC ──► программа liquidity_vault ──CPI──► Raydium CLMM
+   ▲                                                                    │
+   └── onAccountChange (WebSocket): vault, хранилища, share-mint, счета пользователя — обновление сразу
+```
+
+| Файл | Что делает |
+|---|---|
+| `app/src/useVault.ts` | читает vault, пул, позицию и счета пользователя; подписка `onAccountChange` + запасной опрос раз в 30 с |
+| `app/src/lib/amount.ts` | «1,5» ↔ `1500000`. Только `bigint`, без float (у float `0.1 + 0.2 = 0.30000000000000004`) |
+| `app/src/lib/math.ts` | те же формулы, что в `math.rs`, для подсказки «получите ≈ …» |
+| `app/src/lib/validate.ts` | проверка ввода до отправки транзакции |
+| `app/src/lib/errors.ts` | ошибки → понятный текст (коды контракта берутся из IDL) |
+| `app/src/lib/history.ts` | история депозитов и выводов пользователя |
+
+Если RPC devnet отвечает `429`, задайте свой в `app/.env.local`: `VITE_RPC_URL=https://...` (файл не попадает в git,
+но значение вшивается в собранный JS: для публичной сборки берите ключ, ограниченный по домену).
 
 Для localnet без Phantom: `VITE_CLUSTER=localnet VITE_LOCAL_SECRET="$(cat ~/.config/solana/id.json)" npm run dev`
 (тестовый кошелёк-ключ, **только для локальной разработки**).
@@ -315,26 +398,30 @@ npm run dev            # http://localhost:5173, адреса берутся из
 
 ## Тесты
 
-`tests/liquidity-vault.ts`, 20 тестов, сгруппированы по неделям:
+`tests/liquidity-vault.ts`, 28 тестов, сгруппированы по неделям:
 
 ```
 Неделя 8:  создаёт vault, share-токен и хранилище (mint authority и owner = PDA, PDA вне кривой)
            пользователи открывают свои карточки
-Неделя 9:  первый вкладчик получает share 1:1 · запрещает депозит 0
+Неделя 9:  первый вкладчик получает share 1:1 · запрещает депозит 0 · минимальный депозит 1 токен
            пример из методички: 1100 в vault, 1000 share → за 110 токенов дают 100 share
 Неделя 10: вывод 100 share → 110 токенов, в транзакции 2 CPI в Token Program
            нельзя вывести больше share, чем выпущено
+           три пользователя: доля каждого пропорциональна его share · withdraw_all
+           нельзя закрыть карточку с share · пустая карточка закрывается, рента возвращается
 Неделя 11: AmmConfig, пул с ценой 1.0, позиция трейдера
 Неделя 12: только админ привязывает пул · не-админ не может делать обмен
-           обмен отклоняется при slippage · обмен половины A на B с минимумом −1%
+           обмен отклоняется при slippage · больше 50% A за раз нельзя (SwapTooLarge)
+           обмен половины A на B с минимумом −1%
            пока средства в B, депозит закрыт
 Неделя 13: открытие позиции ±10% · пока позиция открыта, вывод закрыт
-           обмены трейдера → комиссии > 0 · закрытие с минимумами −1%
+           обмены трейдера → комиссии > 0 · комиссии докладываются в позицию (increase_liquidity)
+           не-админ не может докладывать ликвидность · закрытие с минимумами −1%
            ребалансировка: цена ушла → новая позиция → закрыть
-           весь B обратно в A · все выводят доли, vault пуст
+           весь B обратно в A · все выводят доли (withdraw_all), vault пуст, карточки закрыты
 ```
 
-Плюс unit-тесты формул в `math.rs` (`npm run test:unit`).
+Плюс unit-тесты формул в `math.rs` (`npm run test:unit`) и 30 тестов сайта (`npm run test:app`, vitest, без сети).
 
 ---
 
@@ -346,26 +433,47 @@ week8-15-liquidity-vault/
 │   ├── lib.rs                 # точка входа: список инструкций
 │   ├── state.rs               # Vault, UserAccount
 │   ├── math.rs                # формулы долей + unit-тесты
-│   ├── constants.rs           # seeds
+│   ├── constants.rs           # seeds, минимальный депозит, лимит обмена
 │   ├── errors.rs, events.rs
 │   └── instructions/
 │       ├── initialize_vault.rs   # неделя 8
 │       ├── open_user_account.rs  # неделя 8
 │       ├── deposit.rs            # неделя 9
-│       ├── withdraw.rs           # неделя 10
+│       ├── withdraw.rs           # неделя 10: withdraw, withdraw_all
+│       ├── close_user_account.rs # закрыть пустую карточку
 │       ├── configure_pool.rs     # неделя 12
 │       ├── swap.rs               # неделя 12
 │       ├── open_position.rs      # неделя 13
-│       └── manage_position.rs    # неделя 13: collect_fees, close_position
+│       └── manage_position.rs    # неделя 13: collect_fees, increase_liquidity, close_position
 ├── sdk/                       # TS-хелперы: PDA, математика тиков, сборка аккаунтов, IDL
 ├── tests/liquidity-vault.ts   # интеграционные тесты
 ├── scripts/
 │   ├── build-raydium-clmm-local.sh  # Raydium CLMM для localnet
 │   ├── test-local.sh
-│   └── devnet/                # 01-setup-pool.ts, vault.ts (CLI)
+│   └── devnet/                # 01-setup-pool.ts, vault.ts (CLI), faucet.ts, common.ts (проверка devnet)
 ├── app/                       # веб-интерфейс
+│   └── src/lib/               #   суммы, формулы, проверка ввода, ошибки, история + тесты (vitest)
 └── deployments/devnet.json    # адреса и подписи транзакций в devnet
 ```
+
+---
+
+## Задания для практики из методички
+
+| # | Задание | Статус |
+|---|---|---|
+| 1 | Комиссия 1% на депозит на `fee_wallet` | не делали: меняет пример из методички (1100/1000 → 100 share) и требует нового поля в `Vault` |
+| 2 | Минимальный депозит 1 токен | ✅ `DepositTooSmall`, тест + проверка на сайте |
+| 3 | Флаг `paused` в vault | не делали: новое поле меняет размер `Vault`, и уже созданный в devnet vault перестал бы читаться. Пауза по факту есть: `VaultNotIdle`, пока средства в Raydium |
+| 4 | Тест: трое пользователей, доли по shares | ✅ alice, bob, carol |
+| 5 | `withdraw_all` | ✅ инструкция, тест, кнопка «Вывести всё», `npm run vault -- withdraw-all` |
+| 6 | Закрыть карточку без shares, вернуть ренту | ✅ `close_user_account`, 2 теста, кнопка на сайте |
+| 7 | `swap`: не больше 50% токена A за раз | ✅ `SwapTooLarge`, тест, кнопка «Макс (50%)» |
+| 8 | `increase_liquidity` | ✅ CPI `increase_liquidity_v2`, 2 теста, кнопка у админа, `npm run vault -- increase` |
+| 9 | Сколько комиссий собрано за всё время | частично: каждое `collect_fees` пишет событие `FeesCollectedEvent`; поле в `Vault` не добавляли по той же причине, что в п. 3 |
+| 10 | История депозитов и выводов на сайте | ✅ `getSignaturesForAddress` для карточки |
+| 11 | Панель админа, видна только админу | ✅ вкладка «Администратор»: swap, позиция, комиссии (`sync_vault` у нас не нужен: стоимость vault читается прямо из хранилища) |
+| 12 | Обновление через `onAccountChange` | ✅ подписка на vault, хранилища, share-mint и счета пользователя |
 
 ---
 

@@ -5,12 +5,15 @@
  *   npx ts-node scripts/devnet/vault.ts init            # неделя 8: создать vault + свою карточку
  *   npx ts-node scripts/devnet/vault.ts deposit 1000    # неделя 9
  *   npx ts-node scripts/devnet/vault.ts withdraw 100    # неделя 10 (кол-во share-токенов)
+ *   npx ts-node scripts/devnet/vault.ts withdraw-all    # вывести все свои share одной транзакцией
+ *   npx ts-node scripts/devnet/vault.ts close-card      # закрыть пустую карточку, вернуть ренту
  *   npx ts-node scripts/devnet/vault.ts configure       # неделя 12: привязать пул, создать хранилище B
  *   npx ts-node scripts/devnet/vault.ts swap a2b 500    # неделя 12: обмен с минимумом -1%
  *   npx ts-node scripts/devnet/vault.ts swap-fail a2b 100  # неделя 12: обмен, отклонённый из-за slippage
  *   npx ts-node scripts/devnet/vault.ts open 10         # неделя 13: позиция ±10% вокруг текущей цены
  *   npx ts-node scripts/devnet/vault.ts trade 4 200     # 4 пары обменов с кошелька напрямую в Raydium → комиссии
  *   npx ts-node scripts/devnet/vault.ts collect         # неделя 13: собрать комиссии
+ *   npx ts-node scripts/devnet/vault.ts increase        # неделя 13: доложить свободные токены (комиссии) в позицию
  *   npx ts-node scripts/devnet/vault.ts close           # неделя 13: закрыть позицию (минимумы -1%)
  *   npx ts-node scripts/devnet/vault.ts status          # состояние vault, пула, позиции
  */
@@ -23,7 +26,8 @@ import {
   getMint,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { setup, loadDeployment, saveDeployment, recordTx, pk, explorerTx } from "./common";
+import { parseAmount } from "../../sdk/amount";
+import { setup, loadDeployment, saveDeployment, recordTx, pk, explorerTx, assertCluster } from "./common";
 import {
   vaultPdas,
   userAccountPda,
@@ -50,7 +54,12 @@ const [cmd, ...args] = process.argv.slice(2);
 async function decimalsA() {
   return (await getMint(connection, pk(d.mintA))).decimals;
 }
-const toUnits = async (x: string) => new BN(Math.round(Number(x) * 10 ** (await decimalsA())));
+/** «1,5» → BN минимальных единиц, без float (та же функция, что на сайте). */
+const toUnits = async (x: string) => {
+  const p = parseAmount(x, await decimalsA());
+  if (!p.ok) throw new Error(`Сумма «${x}»: ${p.error}`);
+  return new BN(p.raw.toString());
+};
 const bal = async (a: PublicKey, prog = TOKEN_PROGRAM_ID) =>
   BigInt((await getAccount(connection, a, "confirmed", prog)).amount.toString());
 
@@ -67,6 +76,7 @@ async function quote(aToB: boolean, amountIn: BN): Promise<BN> {
 }
 
 async function main() {
+  await assertCluster(connection);
   const mintA = pk(d.mintA);
   const p = vaultPdas(program.programId, mintA);
 
@@ -126,6 +136,66 @@ async function main() {
       recordTx(d, "withdraw", sig);
       break;
     }
+    case "withdraw-all": {
+      const v: any = await program.account.vault.fetch(p.vault);
+      const sig = await program.methods
+        .withdrawAll()
+        .accounts({
+          user: wallet.publicKey,
+          vault: p.vault,
+          mintA,
+          shareMint: p.shareMint,
+          vaultA: p.vaultA,
+          vaultB: v.poolState.equals(PublicKey.default) ? null : p.vaultB,
+          userTokenA: getAssociatedTokenAddressSync(mintA, wallet.publicKey),
+          userShare: getAssociatedTokenAddressSync(p.shareMint, wallet.publicKey),
+        } as any)
+        .rpc();
+      recordTx(d, "withdrawAll", sig);
+      break;
+    }
+    case "close-card": {
+      const shareAta = getAssociatedTokenAddressSync(p.shareMint, wallet.publicKey);
+      const sig = await program.methods
+        .closeUserAccount()
+        .accounts({
+          user: wallet.publicKey,
+          vault: p.vault,
+          shareMint: p.shareMint,
+          userShare: (await connection.getAccountInfo(shareAta)) ? shareAta : null,
+        } as any)
+        .rpc();
+      recordTx(d, "closeUserAccount", sig);
+      break;
+    }
+    case "increase": {
+      // доложить свободные токены vault (например, собранные комиссии) в открытую позицию
+      const m = await managePositionAccounts(program, clmm, mintA);
+      const a = new BN((await bal(p.vaultA)).toString());
+      const b = new BN((await bal(p.vaultB)).toString());
+      const aIs0 = m.pool.tokenMint0.equals(mintA);
+      const amount0 = aIs0 ? a : b;
+      const amount1 = aIs0 ? b : a;
+      const liquidity = liquidityFromAmounts(
+        m.pool.sqrtPriceX64,
+        m.position.tickLowerIndex,
+        m.position.tickUpperIndex,
+        amount0,
+        amount1,
+      )
+        .muln(95)
+        .divn(100);
+      if (liquidity.isZero()) throw new Error("Свободных токенов слишком мало, чтобы доложить ликвидность");
+      const sig = await program.methods
+        .increaseLiquidity(liquidity, amount0, amount1)
+        .accounts(m.accounts as any)
+        .remainingAccounts(m.remaining)
+        .preInstructions([computeIx()])
+        .rpc();
+      recordTx(d, "increaseLiquidity", sig);
+      console.log(`  ликвидность +${liquidity.toString()}`);
+      break;
+    }
     case "configure": {
       const sig = await program.methods
         .configurePool()
@@ -161,7 +231,7 @@ async function main() {
         tx.sign(wallet);
         const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
         const res = await connection.confirmTransaction(sig, "confirmed");
-        console.log("  результат:", JSON.stringify(res.value.err), "(6022 = TooLittleOutputReceived у Raydium)");
+        console.log("  результат:", JSON.stringify(res.value.err), "(6018 = TooLittleOutputReceived у Raydium)");
         recordTx(d, "swapRejectedBySlippage", sig);
       } else {
         const sig = await builder.rpc();

@@ -55,3 +55,11 @@ pub struct PositionClosedEvent {
     pub amount_a: u64,
     pub amount_b: u64,
 }
+
+#[event]
+pub struct LiquidityIncreasedEvent {
+    pub vault: Pubkey,
+    pub liquidity: u128,
+    pub amount_a: u64,
+    pub amount_b: u64,
+}

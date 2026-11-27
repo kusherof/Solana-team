@@ -26,4 +26,10 @@ pub enum VaultError {
     VaultNotIdle,
     #[msg("Недостаточно SOL для оплаты аренды аккаунтов Raydium")]
     InsufficientAuthorityLamports,
+    #[msg("Минимальный депозит — 1 токен")]
+    DepositTooSmall,
+    #[msg("За один обмен можно отдать не больше 50% токена A vault")]
+    SwapTooLarge,
+    #[msg("Карточку можно закрыть, только когда у пользователя не осталось share-токенов")]
+    CardNotEmpty,
 }

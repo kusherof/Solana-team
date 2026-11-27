@@ -18,7 +18,7 @@ import {
   mintTo,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { setup, loadDeployment, saveDeployment, recordTx, pk, CLUSTER, explorerTx } from "./common";
+import { setup, loadDeployment, saveDeployment, recordTx, pk, CLUSTER, explorerTx, assertCluster } from "./common";
 import {
   pda,
   sortMints,
@@ -37,6 +37,7 @@ const SEED_AMOUNT = Number(process.env.SEED_AMOUNT ?? 10_000); // сколько
 
 async function main() {
   const { clmm, wallet, connection } = setup();
+  await assertCluster(connection);
   const d = loadDeployment();
   d.clmmProgramId = clmm.programId.toBase58();
   console.log("Кошелёк:", wallet.publicKey.toBase58());

@@ -9,6 +9,7 @@ import type { LiquidityVault } from "../../sdk/liquidity_vault_types";
 import { vaultPdas, userAccountPda } from "../../sdk/vault";
 import { pda as rpda, sqrtPriceX64ToPrice, tickToPrice } from "../../sdk/raydium";
 import { CLMM_ID, MINT_A } from "./config";
+import { describeError } from "./lib/errors";
 
 export type VaultState = {
   exists: boolean;
@@ -26,6 +27,8 @@ export type VaultState = {
   hasPosition: boolean;
   position?: { nft: PublicKey; tickLower: number; tickUpper: number; liquidity: string; priceLower: number; priceUpper: number; inRange: boolean };
   user?: {
+    sol: number;
+    hasShareAccount: boolean;
     tokenA: bigint;
     shares: bigint;
     card: null | { deposited: bigint; withdrawn: bigint; sharesMinted: bigint; sharesBurned: bigint };
@@ -59,6 +62,7 @@ export function useVault() {
 
   const [state, setState] = useState<VaultState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!MINT_A || !pdas) return;
@@ -111,7 +115,10 @@ export function useVault() {
         const card: any = await program.account.userAccount.fetchNullable(
           userAccountPda(program.programId, pdas.vault, wallet.publicKey),
         );
+        const shareAta = getAssociatedTokenAddressSync(v.shareMint, wallet.publicKey);
         s.user = {
+          sol: (await connection.getBalance(wallet.publicKey)) / 1e9,
+          hasShareAccount: !!(await connection.getAccountInfo(shareAta)),
           tokenA: await safeAmount(() => getAccount(connection, getAssociatedTokenAddressSync(v.mintA, wallet.publicKey))),
           shares: await safeAmount(() => getAccount(connection, getAssociatedTokenAddressSync(v.shareMint, wallet.publicKey))),
           card: card
@@ -127,17 +134,42 @@ export function useVault() {
       setState(s);
       setError(null);
     } catch (e: any) {
-      setError(String(e?.message ?? e));
+      setError(describeError(e));
     }
   }, [program, clmm, connection, wallet, pdas]);
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 15000);
+    // Запасной вариант: раз в 30 с (если WebSocket RPC недоступен)
+    const id = setInterval(refresh, 30000);
     return () => clearInterval(id);
   }, [refresh]);
 
-  return { program, clmm, provider, pdas, state, error, refresh, wallet, connection };
+  // Обновляем данные сразу, как только меняется vault, хранилища, share-mint или счета пользователя
+  // (connection.onAccountChange — подписка через WebSocket RPC).
+  useEffect(() => {
+    if (!pdas) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const soon = () => {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 300);
+    };
+    const watch: PublicKey[] = [pdas.vault, pdas.vaultA, pdas.vaultB, pdas.shareMint];
+    if (wallet && MINT_A) {
+      watch.push(
+        userAccountPda(program.programId, pdas.vault, wallet.publicKey),
+        getAssociatedTokenAddressSync(MINT_A, wallet.publicKey),
+        getAssociatedTokenAddressSync(pdas.shareMint, wallet.publicKey),
+      );
+    }
+    const ids = watch.map((k) => connection.onAccountChange(k, soon, "confirmed"));
+    return () => {
+      clearTimeout(timer);
+      ids.forEach((id) => connection.removeAccountChangeListener(id).catch(() => {}));
+    };
+  }, [connection, pdas, wallet, program, refresh]);
+
+  return { program, clmm, provider, pdas, state, error, refresh, wallet, connection, busy, setBusy };
 }
 
 export { TOKEN_2022_PROGRAM_ID };

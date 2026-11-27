@@ -5,7 +5,7 @@
  */
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -30,6 +30,25 @@ export function setup() {
   const clmm = new Program({ ...(clmmIdl as any), address: clmmId.toBase58() }, provider);
   const wallet = (provider.wallet as anchor.Wallet).payer;
   return { provider, program, clmm, wallet, connection: provider.connection };
+}
+
+/** Хеш первого блока (genesis) — по нему можно точно узнать сеть, даже если в RPC-адресе ошибка. */
+export const GENESIS = {
+  devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+  mainnet: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+};
+
+/**
+ * Останавливает скрипт до любой транзакции, если CLUSTER=devnet, а RPC указывает не на devnet
+ * (например, по ошибке на mainnet в ANCHOR_PROVIDER_URL).
+ */
+export async function assertCluster(connection: Connection) {
+  if (CLUSTER !== "devnet") return;
+  const hash = await connection.getGenesisHash();
+  if (hash !== GENESIS.devnet) {
+    const which = hash === GENESIS.mainnet ? "MAINNET" : `неизвестной сети (genesis ${hash})`;
+    throw new Error(`RPC ${connection.rpcEndpoint} принадлежит ${which}, а не devnet. Проверьте ANCHOR_PROVIDER_URL.`);
+  }
 }
 
 export type Deployment = {

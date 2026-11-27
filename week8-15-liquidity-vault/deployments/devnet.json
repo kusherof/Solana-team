@@ -1,1 +1,29 @@
-{}
+{
+  "clmmProgramId": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH",
+  "mintA": "3EzwLJ6DsngqAqror8iZWzYeQe1fbGrtngCCDfeenpXq",
+  "mintB": "CCWRbhSb8BYnuPureBfVCSLiAorPFpwKm7DGLwn4yZBU",
+  "ammConfig": "CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu",
+  "pool": "D69RAEuzoJZrjnyfvrR4L89Nu6oE8jN27dGKq4ftvDAA",
+  "txs": {
+    "createPool": "TezJ838Z3fHkAFzfUK7X7SvayLo74Tq5pKRuo6HZDEcuydGwpLaNpxyAUwj5shNVqdKDQnL5ahazpgjscp36UUR",
+    "openOwnPosition": "5qDtwVqhGLYpnF7zH7RQdQ3uCoayAs5aYmzZYRasDoM1dA6A7d9Ti5qv3S9ZzP9gPVPjHnEcyH8ynn7vg7rUdoxf",
+    "initializeVault": "4KwajkiiDckqTPwAddWLCpjVsgkxmL8VMSkB5bP8u3AfpEbJgTzn9N4JsDaaQmrB3GTDB3BcWTftX9VeysXRLapA",
+    "openUserAccount": "HXYmqVw9NaWbYtsfq6NTLErkpJkEgcFueYrbJvEnC5HjY5GJVL5Aj9Xw1FJJ3DowGcLHxurmsvj6gHLF3QWRGsZ",
+    "deposit": "5ubKiBLecmUFYQd2pBoRKNPwXo5r5K9EUpe8JuYVkNfWfLtr4aiCqBytHv9MymM2dJKWcouUgstW8QvfBm2LFXX4",
+    "withdraw": "2rgdiCRoP49xTS4gVzqrt891AJDohURKtyQ7vh5Fy5WzjMtBvdVixaaVfbmC4V3q4pzhnt84qE5eZ8xEXpURFhPM",
+    "configurePool": "4CV81dxZxNpnA3EZata36vFqLvByciqN2XB6S3VmW7GGSCpLGWLPGZcpgXpEtG5VExasa6i79sChsNKSypeUFLjV",
+    "swapAtoB": "5TVhsawbNJ7Eu4Su5iXT9HU9FS9CWhZsGRHVtTMsjBPg295Pzxu82hHRuvLsd2qtRsbfpn6yPLsHUQnD7giL8s6x",
+    "swapRejectedBySlippage": "cYPxXZGq7KPSa6DmeGpD42WxfJ6bi9fVw7CNEby8m9srZKkDM8vAZWRNHiKehAgzxQ1yaceihASr9VYMgH4TBH1",
+    "openPosition": "foAB6VEa3kbUXQSn2qS9aTztAYQ59oF8rz8md2kJ6pbCGqbdPYWsYAo97RoJP2CBjunZRWN1y5g4VVyAG1kcJw2",
+    "collectFees": "Wudj9yNreCvKgvRTL1ejwA7HuGPemstHpubodNohUKhBurTrgJu18Rz6nTUVdSDE2dDDwv2jaPWj4NwHdcQSYGF",
+    "closePosition": "5Sc18DrPtE27XYn83raHmsa13vKcw45TDntZzFSbAm5R2hRMv41zdHV4mX3Q75zCr2VZQUjMxywrx6XAZu1CseFn",
+    "swapBtoA": "4GGroYjDLttW6R9qPoNu344e9F4tAZCB7rtht35v5ZEQm8wQfVb4NtRdeQrEQYuWEaWuxqeTpd9MwBnwPVEBjGGt"
+  },
+  "ownPositionNft": "Bf6vDGqSdm5nDQUz98Kob7LMREvoE9RqSNA7c4Cy2qUW",
+  "programId": "96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU",
+  "vault": "5Whod5S2vALvitfQf5pGzn9tvPwvsdh1Xuz9N4bp5vdv",
+  "shareMint": "2b92EVKgiWAdN3o3j5ye5MdkQ3VFYG6vfw7dvFjoJ7ag",
+  "vaultA": "5yK7bNvLhSFQZYx11aF91SS15qcnvJSNfZWsrRgBucT3",
+  "vaultAuthority": "AvZSdTzWBDSqCrmara5tLGcEVQSdw56nMdQfjFYG8NYa",
+  "vaultB": "Gj3kFUu6eRWDVNKAthVpxVbWpvt8wTS31BgzJADbhy8m"
+}

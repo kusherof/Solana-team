@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/liquidity_vault.json`.
  */
 export type LiquidityVault = {
-  "address": "CY1oWHjzFTWDrzKq1JwyWMcJtN5T1LhuC9o2YyNnHRqK",
+  "address": "96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU",
   "metadata": {
     "name": "liquidityVault",
     "version": "0.1.0",
@@ -174,6 +174,176 @@ export type LiquidityVault = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "closeUserAccount",
+      "docs": [
+        "Неделя 10 (практика). Закрыть пустую карточку и вернуть ренту пользователю."
+      ],
+      "discriminator": [
+        236,
+        181,
+        3,
+        71,
+        194,
+        18,
+        151,
+        191
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.mint_a",
+                "account": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "userAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "shareMint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "userShare",
+          "docs": [
+            "Кошелёк share-токенов пользователя (ATA). Можно не передавать, если пользователь ни разу не вносил."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "shareMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        }
+      ],
+      "args": []
     },
     {
       "name": "collectFees",
@@ -685,6 +855,172 @@ export type LiquidityVault = {
       "args": [
         {
           "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "increaseLiquidity",
+      "docs": [
+        "Неделя 13 (практика). Доложить свободные токены vault (например, комиссии) в открытую позицию."
+      ],
+      "discriminator": [
+        46,
+        156,
+        243,
+        118,
+        13,
+        205,
+        251,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.mint_a",
+                "account": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "clmmProgram",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+        },
+        {
+          "name": "positionNftMint",
+          "writable": true
+        },
+        {
+          "name": "positionNftAccount",
+          "writable": true
+        },
+        {
+          "name": "personalPosition",
+          "writable": true
+        },
+        {
+          "name": "poolState",
+          "writable": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "protocolPosition"
+        },
+        {
+          "name": "tokenVault0",
+          "writable": true
+        },
+        {
+          "name": "tokenVault1",
+          "writable": true
+        },
+        {
+          "name": "tickArrayLower",
+          "writable": true
+        },
+        {
+          "name": "tickArrayUpper",
+          "writable": true
+        },
+        {
+          "name": "vaultA",
+          "writable": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vaultB",
+          "writable": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault0Mint"
+        },
+        {
+          "name": "vault1Mint"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "tokenProgram2022",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "memoProgram",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidity",
+          "type": "u128"
+        },
+        {
+          "name": "amount0Max",
+          "type": "u64"
+        },
+        {
+          "name": "amount1Max",
           "type": "u64"
         }
       ]
@@ -1383,6 +1719,139 @@ export type LiquidityVault = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "withdrawAll",
+      "docs": [
+        "Неделя 10 (практика). Вывести всё: сжечь все share-токены пользователя за один вызов."
+      ],
+      "discriminator": [
+        96,
+        246,
+        166,
+        130,
+        229,
+        50,
+        43,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.mint_a",
+                "account": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "userAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mintA",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "shareMint",
+          "writable": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vaultA",
+          "writable": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vaultB",
+          "optional": true
+        },
+        {
+          "name": "userTokenA",
+          "writable": true
+        },
+        {
+          "name": "userShare",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -1490,6 +1959,19 @@ export type LiquidityVault = {
         85,
         82,
         54
+      ]
+    },
+    {
+      "name": "liquidityIncreasedEvent",
+      "discriminator": [
+        114,
+        223,
+        229,
+        15,
+        121,
+        60,
+        208,
+        102
       ]
     },
     {
@@ -1605,6 +2087,21 @@ export type LiquidityVault = {
       "code": 6011,
       "name": "insufficientAuthorityLamports",
       "msg": "Недостаточно SOL для оплаты аренды аккаунтов Raydium"
+    },
+    {
+      "code": 6012,
+      "name": "depositTooSmall",
+      "msg": "Минимальный депозит — 1 токен"
+    },
+    {
+      "code": 6013,
+      "name": "swapTooLarge",
+      "msg": "За один обмен можно отдать не больше 50% токена A vault"
+    },
+    {
+      "code": 6014,
+      "name": "cardNotEmpty",
+      "msg": "Карточку можно закрыть, только когда у пользователя не осталось share-токенов"
     }
   ],
   "types": [
@@ -1729,6 +2226,30 @@ export type LiquidityVault = {
           },
           {
             "name": "feesB",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityIncreasedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "liquidity",
+            "type": "u128"
+          },
+          {
+            "name": "amountA",
+            "type": "u64"
+          },
+          {
+            "name": "amountB",
             "type": "u64"
           }
         ]
