@@ -16,6 +16,7 @@ use anchor_spl::token_interface::{
 };
 
 use crate::constants::*;
+pub use anchor_spl::token_interface::spl_token_metadata_interface::state::Field as MetaField;
 
 pub struct NftAccounts<'a, 'info> {
     pub payer: &'a AccountInfo<'info>,
@@ -26,9 +27,13 @@ pub struct NftAccounts<'a, 'info> {
     pub system_program: &'a AccountInfo<'info>,
 }
 
-pub fn hex4(dna: &[u8; 32]) -> String {
+/// Видимые гены (первые 8 байт) в hex — 16 символов.
+pub fn dna_hex(dna: &[u8; 32]) -> String {
     dna[..8].iter().map(|b| format!("{:02x}", b)).collect()
 }
+
+/// Пока яйцо не вылупилось, ДНК ещё не известна.
+pub const DNA_PLACEHOLDER: &str = "????????????????";
 
 /// Доплатить ренту, если аккаунт вырастет до `new_len` байт.
 pub fn top_up_rent<'info>(
@@ -59,13 +64,12 @@ pub fn mint_pet_nft<'info>(
     config_bump: u8,
     name: String,
     generation: u16,
-    dna: &[u8; 32],
 ) -> Result<()> {
     let seeds: &[&[u8]] = &[CONFIG_SEED, &[config_bump]];
     let signer = &[seeds];
 
     let gen_s = generation.to_string();
-    let dna_s = hex4(dna);
+    let dna_s = DNA_PLACEHOLDER.to_string();
     let meta = TokenMetadata {
         update_authority: OptionalNonZeroPubkey::try_from(Some(a.config.key()))?,
         mint: a.mint.key(),
@@ -77,8 +81,7 @@ pub fn mint_pet_nft<'info>(
             ("dna".to_string(), dna_s.clone()),
         ],
     };
-    // +MAX_NAME_LEN запас, чтобы потом можно было переименовать без доплаты
-    let new_len = a.mint.data_len() + meta.tlv_size_of()? + MAX_NAME_LEN;
+    let new_len = a.mint.data_len() + meta.tlv_size_of()?;
     top_up_rent(a.payer, a.mint, a.system_program, new_len)?;
 
     token_metadata_initialize(
@@ -142,17 +145,21 @@ pub fn mint_pet_nft<'info>(
     Ok(())
 }
 
-/// Обновить имя NFT в метаданных.
-pub fn rename_nft<'info>(
+/// Обновить одно поле метаданных NFT, доплатив ренту за прирост длины.
+#[allow(clippy::too_many_arguments)]
+pub fn update_nft_field<'info>(
     payer: &AccountInfo<'info>,
     mint: &AccountInfo<'info>,
     config: &AccountInfo<'info>,
     token_program: &AccountInfo<'info>,
     system_program: &AccountInfo<'info>,
     config_bump: u8,
-    name: String,
+    field: Field,
+    value: String,
+    old_len: usize,
 ) -> Result<()> {
-    top_up_rent(payer, mint, system_program, mint.data_len() + name.len())?;
+    let grow = value.len().saturating_sub(old_len);
+    top_up_rent(payer, mint, system_program, mint.data_len() + grow)?;
     let seeds: &[&[u8]] = &[CONFIG_SEED, &[config_bump]];
     token_metadata_update_field(
         CpiContext::new_with_signer(
@@ -164,7 +171,7 @@ pub fn rename_nft<'info>(
             },
             &[seeds],
         ),
-        Field::Name,
-        name,
+        field,
+        value,
     )
 }

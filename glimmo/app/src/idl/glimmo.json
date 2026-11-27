@@ -198,10 +198,6 @@
           }
         },
         {
-          "name": "slot_hashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
-        },
-        {
           "name": "token_2022_program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
         },
@@ -447,10 +443,6 @@
               }
             ]
           }
-        },
-        {
-          "name": "slot_hashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
         },
         {
           "name": "token_program",
@@ -713,7 +705,7 @@
     {
       "name": "hatch",
       "docs": [
-        "Вылупить питомца, когда истёк таймер яйца."
+        "Вылупить питомца, когда истёк таймер яйца. Именно здесь выпадает ДНК."
       ],
       "discriminator": [
         252,
@@ -771,10 +763,23 @@
           }
         },
         {
-          "name": "pet_token",
-          "docs": [
-            "Токен-аккаунт владельца с NFT питомца (проверяем, что NFT у него)."
-          ]
+          "name": "pet_token"
+        },
+        {
+          "name": "pet_mint",
+          "writable": true
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -782,7 +787,7 @@
     {
       "name": "initialize",
       "docs": [
-        "Создать игру: конфиг, mint еды FOOD и казну. Вызывает администратор один раз."
+        "Создать игру: конфиг, mint еды FOOD и казну. Может только upgrade authority программы."
       ],
       "discriminator": [
         175,
@@ -799,6 +804,17 @@
           "name": "admin",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "program",
+          "docs": [
+            "Только тот, кто задеплоил программу (upgrade authority), может создать",
+            "игру — иначе первый встречный стал бы админом и забрал казну."
+          ],
+          "address": "HSKLQX3Q8pwhn8gJfgDvHjVwyBV5DgGqVGCFicUuxdeX"
+        },
+        {
+          "name": "program_data"
         },
         {
           "name": "config",
@@ -1221,6 +1237,19 @@
       ]
     },
     {
+      "name": "CareStreak",
+      "discriminator": [
+        231,
+        20,
+        26,
+        162,
+        124,
+        35,
+        63,
+        53
+      ]
+    },
+    {
       "name": "EggAdopted",
       "discriminator": [
         137,
@@ -1329,7 +1358,7 @@
     {
       "code": 6000,
       "name": "BadName",
-      "msg": "Имя должно быть от 1 до 20 байт"
+      "msg": "Имя: от 1 до 20 символов, без пробелов по краям"
     },
     {
       "code": 6001,
@@ -1403,11 +1432,31 @@
     },
     {
       "code": 6015,
+      "name": "NeedPet",
+      "msg": "Сначала заведите питомца: кормушка только для хозяев"
+    },
+    {
+      "code": 6016,
+      "name": "TooManyChildren",
+      "msg": "У питомца уже максимум детей"
+    },
+    {
+      "code": 6017,
+      "name": "Related",
+      "msg": "Нельзя скрещивать родителя с его ребёнком"
+    },
+    {
+      "code": 6018,
+      "name": "TooSad",
+      "msg": "Питомцу грустно, сначала поиграйте с ним"
+    },
+    {
+      "code": 6019,
       "name": "TreasuryEmpty",
       "msg": "Недостаточно средств в казне"
     },
     {
-      "code": 6016,
+      "code": 6020,
       "name": "Overflow",
       "msg": "Арифметическое переполнение"
     }
@@ -1435,21 +1484,32 @@
             "type": "pubkey"
           },
           {
-            "name": "dna",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
             "name": "generation",
             "type": "u16"
           },
           {
-            "name": "mutations",
-            "type": "u8"
+            "name": "food_cost",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CareStreak",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "streak",
+            "type": "u16"
+          },
+          {
+            "name": "bond",
+            "type": "u32"
           }
         ]
       }
@@ -1516,15 +1576,6 @@
             "type": "u64"
           },
           {
-            "name": "dna",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
             "name": "hatch_at",
             "type": "i64"
           }
@@ -1542,6 +1593,10 @@
           },
           {
             "name": "stage",
+            "type": "u8"
+          },
+          {
+            "name": "form",
             "type": "u8"
           }
         ]
@@ -1640,14 +1695,14 @@
           {
             "name": "breed_cooldown",
             "docs": [
-              "Пауза между скрещиваниями для одного питомца (сек)."
+              "Базовая пауза между скрещиваниями (растёт вдвое с каждым ребёнком)."
             ],
             "type": "i64"
           },
           {
             "name": "breed_food_cost",
             "docs": [
-              "Сколько FOOD стоит скрещивание."
+              "Базовая цена скрещивания в FOOD (растёт с числом детей)."
             ],
             "type": "u64"
           },
@@ -1671,6 +1726,13 @@
               "Уровень, на котором питомец становится взрослым."
             ],
             "type": "u8"
+          },
+          {
+            "name": "care_period",
+            "docs": [
+              "Длина «дня заботы» для серии (сек). В настоящей игре 86400."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -1689,7 +1751,27 @@
             "type": "u64"
           },
           {
+            "name": "dna",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
             "name": "shiny",
+            "type": "bool"
+          },
+          {
+            "name": "mutations",
+            "type": "u8"
+          },
+          {
+            "name": "fresh_seed",
+            "docs": [
+              "false — вылупили слишком поздно, ДНК запасная"
+            ],
             "type": "bool"
           }
         ]
@@ -1734,7 +1816,8 @@
           {
             "name": "dna",
             "docs": [
-              "32 байта генов, из них рисуется внешность."
+              "32 байта генов. Пока питомец в яйце, здесь гены родителя A",
+              "(или нули), настоящая ДНК выпадает при вылуплении."
             ],
             "type": {
               "array": [
@@ -1742,6 +1825,25 @@
                 32
               ]
             }
+          },
+          {
+            "name": "dna_b",
+            "docs": [
+              "Гены родителя B (только для яиц от скрещивания)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "seed_slot",
+            "docs": [
+              "Слот, хеш которого станет «кубиком» для ДНК при вылуплении."
+            ],
+            "type": "u64"
           },
           {
             "name": "generation",
@@ -1808,7 +1910,42 @@
           },
           {
             "name": "children",
+            "type": "u8"
+          },
+          {
+            "name": "bond",
+            "docs": [
+              "Привязанность: растёт от заботы, падает, если про питомца забыли."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "streak",
+            "docs": [
+              "Серия «дней заботы» подряд."
+            ],
             "type": "u16"
+          },
+          {
+            "name": "last_care_period",
+            "docs": [
+              "Номер последнего «дня заботы»."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "care_mistakes",
+            "docs": [
+              "Сколько раз питомец доходил до нуля сытости."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "form",
+            "docs": [
+              "Облик взрослого (FORM_*), фиксируется при эволюции во взрослого."
+            ],
+            "type": "u8"
           },
           {
             "name": "bump",

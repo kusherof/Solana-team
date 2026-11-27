@@ -1,12 +1,10 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::slot_hashes;
 use anchor_lang::system_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 
 use crate::constants::*;
 use crate::events::EggAdopted;
-use crate::genes;
 use crate::nft::{mint_pet_nft, NftAccounts};
 use crate::state::*;
 
@@ -55,9 +53,6 @@ pub struct AdoptEgg<'info> {
         bump
     )]
     pub pet: Box<Account<'info, Pet>>,
-    /// CHECK: sysvar SlotHashes, проверяется по адресу
-    #[account(address = slot_hashes::ID)]
-    pub slot_hashes: UncheckedAccount<'info>,
     pub token_2022_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -70,17 +65,21 @@ pub fn init_egg(
     mint: Pubkey,
     id: u64,
     name: String,
-    dna: [u8; 32],
+    parent_dna: ([u8; 32], [u8; 32]),
     generation: u16,
     parents: (Pubkey, Pubkey),
-    now: i64,
+    clock: &Clock,
     params: &GameParams,
     bump: u8,
 ) {
+    let now = clock.unix_timestamp;
     pet.mint = mint;
     pet.id = id;
     pet.name = name;
-    pet.dna = dna;
+    // Гены выпадут при вылуплении из хеша следующего слота
+    pet.dna = parent_dna.0;
+    pet.dna_b = parent_dna.1;
+    pet.seed_slot = clock.slot + 1;
     pet.generation = generation;
     pet.parent_a = parents.0;
     pet.parent_b = parents.1;
@@ -97,12 +96,16 @@ pub fn init_egg(
     pet.times_fed = 0;
     pet.times_played = 0;
     pet.children = 0;
+    pet.bond = 0;
+    pet.streak = 0;
+    pet.last_care_period = 0;
+    pet.care_mistakes = 0;
+    pet.form = FORM_NONE;
     pet.bump = bump;
 }
 
 pub fn adopt_egg(ctx: Context<AdoptEgg>, name: String) -> Result<()> {
     validate_name(&name)?;
-    let now = Clock::get()?.unix_timestamp;
     let price = ctx.accounts.config.params.egg_price;
 
     if price > 0 {
@@ -118,17 +121,8 @@ pub fn adopt_egg(ctx: Context<AdoptEgg>, name: String) -> Result<()> {
         )?;
     }
 
+    let clock = Clock::get()?;
     let id = ctx.accounts.config.total_pets;
-    let seed = genes::recent_slot_hash(&ctx.accounts.slot_hashes.to_account_info())?;
-    let dna = genes::random_dna(
-        &seed,
-        &[
-            ctx.accounts.owner.key().as_ref(),
-            &id.to_le_bytes(),
-            &now.to_le_bytes(),
-        ],
-    );
-
     mint_pet_nft(
         NftAccounts {
             payer: &ctx.accounts.owner.to_account_info(),
@@ -141,7 +135,6 @@ pub fn adopt_egg(ctx: Context<AdoptEgg>, name: String) -> Result<()> {
         ctx.accounts.config.bump,
         name.clone(),
         0,
-        &dna,
     )?;
 
     let params = ctx.accounts.config.params;
@@ -150,10 +143,10 @@ pub fn adopt_egg(ctx: Context<AdoptEgg>, name: String) -> Result<()> {
         ctx.accounts.pet_mint.key(),
         id,
         name,
-        dna,
+        ([0; 32], [0; 32]),
         0,
         (Pubkey::default(), Pubkey::default()),
-        now,
+        &clock,
         &params,
         ctx.bumps.pet,
     );
@@ -163,8 +156,8 @@ pub fn adopt_egg(ctx: Context<AdoptEgg>, name: String) -> Result<()> {
         player.owner = ctx.accounts.owner.key();
         player.bump = ctx.bumps.player;
     }
-    player.eggs_adopted += 1;
-    player.actions += 1;
+    player.eggs_adopted = player.eggs_adopted.saturating_add(1);
+    player.actions = player.actions.saturating_add(1);
     ctx.accounts.config.total_pets += 1;
 
     emit!(EggAdopted {
@@ -172,7 +165,6 @@ pub fn adopt_egg(ctx: Context<AdoptEgg>, name: String) -> Result<()> {
         pet: ctx.accounts.pet.key(),
         mint: ctx.accounts.pet_mint.key(),
         id,
-        dna,
         hatch_at: ctx.accounts.pet.hatch_at,
     });
     Ok(())

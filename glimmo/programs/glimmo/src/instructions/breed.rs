@@ -1,6 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::hash::hashv;
-use anchor_lang::solana_program::sysvar::slot_hashes;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Burn, Mint as FoodMint, Token, TokenAccount as FoodAccount};
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
@@ -8,7 +6,6 @@ use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 use crate::constants::*;
 use crate::errors::GlimmoError;
 use crate::events::Bred;
-use crate::genes;
 use crate::instructions::adopt::init_egg;
 use crate::nft::{mint_pet_nft, NftAccounts};
 use crate::state::*;
@@ -88,37 +85,65 @@ pub struct Breed<'info> {
     )]
     pub child: Box<Account<'info, Pet>>,
 
-    /// CHECK: sysvar SlotHashes, проверяется по адресу
-    #[account(address = slot_hashes::ID)]
-    pub slot_hashes: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
+/// Пауза после скрещивания: удваивается с каждым ребёнком (до x16).
+pub fn breed_cooldown(p: &GameParams, children: u8) -> i64 {
+    p.breed_cooldown.saturating_mul(1i64 << children.min(4))
+}
+
+/// Цена в FOOD: база × (1 + детей у «более опытного» родителя).
+pub fn breed_cost(p: &GameParams, a_children: u8, b_children: u8) -> u64 {
+    p.breed_food_cost
+        .saturating_mul(1 + a_children.max(b_children) as u64)
+}
+
 fn check_parent(pet: &mut Pet, now: i64, p: &GameParams) -> Result<()> {
     pet.apply_decay(now, p);
     require!(pet.stage(p) == Stage::Adult, GlimmoError::NotAdult);
+    require!(pet.children < MAX_CHILDREN, GlimmoError::TooManyChildren);
     require!(pet.satiety >= MIN_SATIETY_TO_BREED, GlimmoError::TooHungry);
+    require!(pet.mood >= MIN_MOOD_TO_BREED, GlimmoError::TooSad);
     require!(
-        pet.last_breed == 0 || now - pet.last_breed >= p.breed_cooldown,
+        pet.last_breed == 0 || now - pet.last_breed >= breed_cooldown(p, pet.children.saturating_sub(1)),
         GlimmoError::BreedCooldown
     );
-    pet.last_breed = now;
-    pet.children += 1;
     Ok(())
+}
+
+fn after_breed(pet: &mut Pet, now: i64) {
+    pet.last_breed = now;
+    pet.children = pet.children.saturating_add(1);
+    pet.satiety = pet.satiety.saturating_sub(BREED_SATIETY_COST);
+    pet.mood = pet.mood.saturating_sub(BREED_MOOD_COST);
 }
 
 pub fn breed(ctx: Context<Breed>, name: String) -> Result<()> {
     validate_name(&name)?;
-    let now = Clock::get()?.unix_timestamp;
+    let clock = Clock::get()?;
+    let now = clock.unix_timestamp;
     let params = ctx.accounts.config.params;
+    let a_key = ctx.accounts.parent_a.key();
+    let b_key = ctx.accounts.parent_b.key();
 
+    // Родителя нельзя скрестить с его ребёнком
+    {
+        let a = &ctx.accounts.parent_a;
+        let b = &ctx.accounts.parent_b;
+        require!(
+            a.parent_a != b_key && a.parent_b != b_key && b.parent_a != a_key && b.parent_b != a_key,
+            GlimmoError::Related
+        );
+    }
     check_parent(&mut ctx.accounts.parent_a, now, &params)?;
     check_parent(&mut ctx.accounts.parent_b, now, &params)?;
 
-    if params.breed_food_cost > 0 {
+    let cost = breed_cost(&params, ctx.accounts.parent_a.children, ctx.accounts.parent_b.children);
+    if cost > 0 {
         token::burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -128,21 +153,13 @@ pub fn breed(ctx: Context<Breed>, name: String) -> Result<()> {
                     authority: ctx.accounts.owner.to_account_info(),
                 },
             ),
-            params.breed_food_cost,
+            cost,
         )?;
     }
+    after_breed(&mut ctx.accounts.parent_a, now);
+    after_breed(&mut ctx.accounts.parent_b, now);
 
     let id = ctx.accounts.config.total_pets;
-    let seed = genes::recent_slot_hash(&ctx.accounts.slot_hashes.to_account_info())?;
-    let rnd = hashv(&[
-        &seed,
-        ctx.accounts.parent_a.key().as_ref(),
-        ctx.accounts.parent_b.key().as_ref(),
-        &id.to_le_bytes(),
-        &now.to_le_bytes(),
-    ])
-    .to_bytes();
-    let (dna, mutations) = genes::mix_dna(&ctx.accounts.parent_a.dna, &ctx.accounts.parent_b.dna, &rnd);
     let generation = ctx
         .accounts
         .parent_a
@@ -163,19 +180,19 @@ pub fn breed(ctx: Context<Breed>, name: String) -> Result<()> {
         ctx.accounts.config.bump,
         name.clone(),
         generation,
-        &dna,
     )?;
 
-    let parents = (ctx.accounts.parent_a.key(), ctx.accounts.parent_b.key());
+    // Гены родителей сохраняются в яйце, смешаются при вылуплении
+    let dnas = (ctx.accounts.parent_a.dna, ctx.accounts.parent_b.dna);
     init_egg(
         &mut ctx.accounts.child,
         ctx.accounts.child_mint.key(),
         id,
         name,
-        dna,
+        dnas,
         generation,
-        parents,
-        now,
+        (a_key, b_key),
+        &clock,
         &params,
         ctx.bumps.child,
     );
@@ -185,18 +202,45 @@ pub fn breed(ctx: Context<Breed>, name: String) -> Result<()> {
         player.owner = ctx.accounts.owner.key();
         player.bump = ctx.bumps.player;
     }
-    player.pets_bred += 1;
-    player.actions += 1;
+    player.pets_bred = player.pets_bred.saturating_add(1);
+    player.actions = player.actions.saturating_add(1);
     ctx.accounts.config.total_pets += 1;
 
     emit!(Bred {
-        parent_a: parents.0,
-        parent_b: parents.1,
+        parent_a: a_key,
+        parent_b: b_key,
         child: ctx.accounts.child.key(),
         child_mint: ctx.accounts.child_mint.key(),
-        dna,
         generation,
-        mutations,
+        food_cost: cost,
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn breeding_gets_slower_and_pricier() {
+        let p = GameParams {
+            egg_price: 0,
+            hatch_seconds: 0,
+            decay_seconds: 10,
+            food_per_claim: 5,
+            food_cooldown: 0,
+            play_cooldown: 0,
+            breed_cooldown: 100,
+            breed_food_cost: 3,
+            xp_per_level: 100,
+            teen_level: 3,
+            adult_level: 6,
+            care_period: 100,
+        };
+        assert_eq!(breed_cooldown(&p, 0), 100);
+        assert_eq!(breed_cooldown(&p, 2), 400);
+        assert_eq!(breed_cooldown(&p, 9), 1600);
+        assert_eq!(breed_cost(&p, 0, 0), 3);
+        assert_eq!(breed_cost(&p, 1, 3), 12);
+    }
 }

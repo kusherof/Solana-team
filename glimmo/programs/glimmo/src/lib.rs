@@ -24,7 +24,7 @@ declare_id!("HSKLQX3Q8pwhn8gJfgDvHjVwyBV5DgGqVGCFicUuxdeX");
 pub mod glimmo {
     use super::*;
 
-    /// Создать игру: конфиг, mint еды FOOD и казну. Вызывает администратор один раз.
+    /// Создать игру: конфиг, mint еды FOOD и казну. Может только upgrade authority программы.
     pub fn initialize(ctx: Context<Initialize>, params: GameParams) -> Result<()> {
         instructions::admin::initialize(ctx, params)
     }
@@ -49,8 +49,8 @@ pub mod glimmo {
         instructions::adopt::adopt_egg(ctx, name)
     }
 
-    /// Вылупить питомца, когда истёк таймер яйца.
-    pub fn hatch(ctx: Context<PetAction>) -> Result<()> {
+    /// Вылупить питомца, когда истёк таймер яйца. Именно здесь выпадает ДНК.
+    pub fn hatch(ctx: Context<Hatch>) -> Result<()> {
         instructions::care::hatch(ctx)
     }
 

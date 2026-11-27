@@ -12,7 +12,6 @@ pub struct EggAdopted {
     pub pet: Pubkey,
     pub mint: Pubkey,
     pub id: u64,
-    pub dna: [u8; 32],
     pub hatch_at: i64,
 }
 
@@ -20,7 +19,11 @@ pub struct EggAdopted {
 pub struct Hatched {
     pub pet: Pubkey,
     pub id: u64,
+    pub dna: [u8; 32],
     pub shiny: bool,
+    pub mutations: u8,
+    /// false — вылупили слишком поздно, ДНК запасная
+    pub fresh_seed: bool,
 }
 
 #[event]
@@ -48,6 +51,7 @@ pub struct LevelUp {
 pub struct Evolved {
     pub pet: Pubkey,
     pub stage: u8,
+    pub form: u8,
 }
 
 #[event]
@@ -56,13 +60,19 @@ pub struct Bred {
     pub parent_b: Pubkey,
     pub child: Pubkey,
     pub child_mint: Pubkey,
-    pub dna: [u8; 32],
     pub generation: u16,
-    pub mutations: u8,
+    pub food_cost: u64,
 }
 
 #[event]
 pub struct Renamed {
     pub pet: Pubkey,
     pub name: String,
+}
+
+#[event]
+pub struct CareStreak {
+    pub pet: Pubkey,
+    pub streak: u16,
+    pub bond: u32,
 }

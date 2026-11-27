@@ -10,6 +10,12 @@ use crate::state::*;
 pub struct Initialize<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
+    /// Только тот, кто задеплоил программу (upgrade authority), может создать
+    /// игру — иначе первый встречный стал бы админом и забрал казну.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ GlimmoError::NotAdmin)]
+    pub program: Program<'info, crate::program::Glimmo>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(admin.key()) @ GlimmoError::NotAdmin)]
+    pub program_data: Account<'info, ProgramData>,
     #[account(
         init,
         payer = admin,

@@ -8,7 +8,7 @@ anchor keys sync >/dev/null
 anchor build
 LEDGER="$(mktemp -d)"
 solana-test-validator --reset --quiet --ledger "$LEDGER" \
-  --bpf-program "$(solana-keygen pubkey target/deploy/glimmo-keypair.json)" target/deploy/glimmo.so \
+  --upgradeable-program "$(solana-keygen pubkey target/deploy/glimmo-keypair.json)" target/deploy/glimmo.so "$(solana-keygen pubkey ~/.config/solana/id.json)" \
   > "$LEDGER/validator.log" 2>&1 &
 VPID=$!
 trap 'kill $VPID 2>/dev/null || true' EXIT

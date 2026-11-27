@@ -13,13 +13,7 @@ pub struct ClaimFood<'info> {
     pub owner: Signer<'info>,
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
-    #[account(
-        init_if_needed,
-        payer = owner,
-        space = 8 + Player::INIT_SPACE,
-        seeds = [PLAYER_SEED, owner.key().as_ref()],
-        bump
-    )]
+    #[account(mut, seeds = [PLAYER_SEED, owner.key().as_ref()], bump = player.bump)]
     pub player: Box<Account<'info, Player>>,
     #[account(mut, seeds = [FOOD_MINT_SEED], bump = config.food_bump)]
     pub food_mint: Box<Account<'info, Mint>>,
@@ -40,17 +34,18 @@ pub fn claim_food(ctx: Context<ClaimFood>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let cfg = &ctx.accounts.config;
     let player = &mut ctx.accounts.player;
-    if player.owner == Pubkey::default() {
-        player.owner = ctx.accounts.owner.key();
-        player.bump = ctx.bumps.player;
-    } else {
-        require!(
-            now - player.last_food_claim >= cfg.params.food_cooldown,
-            GlimmoError::FoodCooldown
-        );
-    }
+    // Кормушка только для хозяев питомцев: иначе можно наплодить пустых
+    // кошельков и собрать бесконечно еды.
+    require!(
+        player.owner != Pubkey::default() && (player.eggs_adopted > 0 || player.pets_bred > 0),
+        GlimmoError::NeedPet
+    );
+    require!(
+        player.last_food_claim == 0 || now - player.last_food_claim >= cfg.params.food_cooldown,
+        GlimmoError::FoodCooldown
+    );
     player.last_food_claim = now;
-    player.actions += 1;
+    player.actions = player.actions.saturating_add(1);
 
     let amount = cfg.params.food_per_claim;
     let seeds: &[&[u8]] = &[CONFIG_SEED, &[cfg.bump]];

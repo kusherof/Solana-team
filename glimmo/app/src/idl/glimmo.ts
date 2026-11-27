@@ -204,10 +204,6 @@ export type Glimmo = {
           }
         },
         {
-          "name": "slotHashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
-        },
-        {
           "name": "token2022Program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
         },
@@ -453,10 +449,6 @@ export type Glimmo = {
               }
             ]
           }
-        },
-        {
-          "name": "slotHashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
         },
         {
           "name": "tokenProgram",
@@ -719,7 +711,7 @@ export type Glimmo = {
     {
       "name": "hatch",
       "docs": [
-        "Вылупить питомца, когда истёк таймер яйца."
+        "Вылупить питомца, когда истёк таймер яйца. Именно здесь выпадает ДНК."
       ],
       "discriminator": [
         252,
@@ -777,10 +769,23 @@ export type Glimmo = {
           }
         },
         {
-          "name": "petToken",
-          "docs": [
-            "Токен-аккаунт владельца с NFT питомца (проверяем, что NFT у него)."
-          ]
+          "name": "petToken"
+        },
+        {
+          "name": "petMint",
+          "writable": true
+        },
+        {
+          "name": "slotHashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "token2022Program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -788,7 +793,7 @@ export type Glimmo = {
     {
       "name": "initialize",
       "docs": [
-        "Создать игру: конфиг, mint еды FOOD и казну. Вызывает администратор один раз."
+        "Создать игру: конфиг, mint еды FOOD и казну. Может только upgrade authority программы."
       ],
       "discriminator": [
         175,
@@ -805,6 +810,17 @@ export type Glimmo = {
           "name": "admin",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "program",
+          "docs": [
+            "Только тот, кто задеплоил программу (upgrade authority), может создать",
+            "игру — иначе первый встречный стал бы админом и забрал казну."
+          ],
+          "address": "HSKLQX3Q8pwhn8gJfgDvHjVwyBV5DgGqVGCFicUuxdeX"
+        },
+        {
+          "name": "programData"
         },
         {
           "name": "config",
@@ -1227,6 +1243,19 @@ export type Glimmo = {
       ]
     },
     {
+      "name": "careStreak",
+      "discriminator": [
+        231,
+        20,
+        26,
+        162,
+        124,
+        35,
+        63,
+        53
+      ]
+    },
+    {
       "name": "eggAdopted",
       "discriminator": [
         137,
@@ -1335,7 +1364,7 @@ export type Glimmo = {
     {
       "code": 6000,
       "name": "badName",
-      "msg": "Имя должно быть от 1 до 20 байт"
+      "msg": "Имя: от 1 до 20 символов, без пробелов по краям"
     },
     {
       "code": 6001,
@@ -1409,11 +1438,31 @@ export type Glimmo = {
     },
     {
       "code": 6015,
+      "name": "needPet",
+      "msg": "Сначала заведите питомца: кормушка только для хозяев"
+    },
+    {
+      "code": 6016,
+      "name": "tooManyChildren",
+      "msg": "У питомца уже максимум детей"
+    },
+    {
+      "code": 6017,
+      "name": "related",
+      "msg": "Нельзя скрещивать родителя с его ребёнком"
+    },
+    {
+      "code": 6018,
+      "name": "tooSad",
+      "msg": "Питомцу грустно, сначала поиграйте с ним"
+    },
+    {
+      "code": 6019,
       "name": "treasuryEmpty",
       "msg": "Недостаточно средств в казне"
     },
     {
-      "code": 6016,
+      "code": 6020,
       "name": "overflow",
       "msg": "Арифметическое переполнение"
     }
@@ -1441,21 +1490,32 @@ export type Glimmo = {
             "type": "pubkey"
           },
           {
-            "name": "dna",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
             "name": "generation",
             "type": "u16"
           },
           {
-            "name": "mutations",
-            "type": "u8"
+            "name": "foodCost",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "careStreak",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "streak",
+            "type": "u16"
+          },
+          {
+            "name": "bond",
+            "type": "u32"
           }
         ]
       }
@@ -1522,15 +1582,6 @@ export type Glimmo = {
             "type": "u64"
           },
           {
-            "name": "dna",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
             "name": "hatchAt",
             "type": "i64"
           }
@@ -1548,6 +1599,10 @@ export type Glimmo = {
           },
           {
             "name": "stage",
+            "type": "u8"
+          },
+          {
+            "name": "form",
             "type": "u8"
           }
         ]
@@ -1646,14 +1701,14 @@ export type Glimmo = {
           {
             "name": "breedCooldown",
             "docs": [
-              "Пауза между скрещиваниями для одного питомца (сек)."
+              "Базовая пауза между скрещиваниями (растёт вдвое с каждым ребёнком)."
             ],
             "type": "i64"
           },
           {
             "name": "breedFoodCost",
             "docs": [
-              "Сколько FOOD стоит скрещивание."
+              "Базовая цена скрещивания в FOOD (растёт с числом детей)."
             ],
             "type": "u64"
           },
@@ -1677,6 +1732,13 @@ export type Glimmo = {
               "Уровень, на котором питомец становится взрослым."
             ],
             "type": "u8"
+          },
+          {
+            "name": "carePeriod",
+            "docs": [
+              "Длина «дня заботы» для серии (сек). В настоящей игре 86400."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -1695,7 +1757,27 @@ export type Glimmo = {
             "type": "u64"
           },
           {
+            "name": "dna",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
             "name": "shiny",
+            "type": "bool"
+          },
+          {
+            "name": "mutations",
+            "type": "u8"
+          },
+          {
+            "name": "freshSeed",
+            "docs": [
+              "false — вылупили слишком поздно, ДНК запасная"
+            ],
             "type": "bool"
           }
         ]
@@ -1740,7 +1822,8 @@ export type Glimmo = {
           {
             "name": "dna",
             "docs": [
-              "32 байта генов, из них рисуется внешность."
+              "32 байта генов. Пока питомец в яйце, здесь гены родителя A",
+              "(или нули), настоящая ДНК выпадает при вылуплении."
             ],
             "type": {
               "array": [
@@ -1748,6 +1831,25 @@ export type Glimmo = {
                 32
               ]
             }
+          },
+          {
+            "name": "dnaB",
+            "docs": [
+              "Гены родителя B (только для яиц от скрещивания)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "seedSlot",
+            "docs": [
+              "Слот, хеш которого станет «кубиком» для ДНК при вылуплении."
+            ],
+            "type": "u64"
           },
           {
             "name": "generation",
@@ -1814,7 +1916,42 @@ export type Glimmo = {
           },
           {
             "name": "children",
+            "type": "u8"
+          },
+          {
+            "name": "bond",
+            "docs": [
+              "Привязанность: растёт от заботы, падает, если про питомца забыли."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "streak",
+            "docs": [
+              "Серия «дней заботы» подряд."
+            ],
             "type": "u16"
+          },
+          {
+            "name": "lastCarePeriod",
+            "docs": [
+              "Номер последнего «дня заботы»."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "careMistakes",
+            "docs": [
+              "Сколько раз питомец доходил до нуля сытости."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "form",
+            "docs": [
+              "Облик взрослого (FORM_*), фиксируется при эволюции во взрослого."
+            ],
+            "type": "u8"
           },
           {
             "name": "bump",
