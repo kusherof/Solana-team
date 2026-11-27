@@ -84,6 +84,11 @@ pub fn handler<'a, 'b, 'c: 'info, 'info>(
     a_to_b: bool,
 ) -> Result<()> {
     require!(amount_in > 0, VaultError::ZeroAmount);
+    // Ограничение риска: за один обмен A → B — не больше 50% токена A vault.
+    if a_to_b {
+        let max_in = (ctx.accounts.vault_a.amount as u128 * MAX_SWAP_BPS as u128 / 10_000) as u64;
+        require!(amount_in <= max_in, VaultError::SwapTooLarge);
+    }
 
     let (input_ta, output_ta) = if a_to_b {
         (&ctx.accounts.vault_a, &ctx.accounts.vault_b)

@@ -72,6 +72,7 @@ describe("liquidity-vault", () => {
   );
   const alice = Keypair.generate();
   const bob = Keypair.generate();
+  const carol = Keypair.generate();
   const trader = Keypair.generate();
 
   let mintA: PublicKey;
@@ -104,13 +105,13 @@ describe("liquidity-vault", () => {
   };
 
   before(async () => {
-    for (const kp of [alice, bob, trader, clmmAdmin]) await airdrop(kp.publicKey);
+    for (const kp of [alice, bob, carol, trader, clmmAdmin]) await airdrop(kp.publicKey);
 
     mintA = await createMint(connection, admin, admin.publicKey, null, DEC);
     mintB = await createMint(connection, admin, admin.publicKey, null, DEC);
     p = vaultPdas(program.programId, mintA);
 
-    for (const [name, kp] of Object.entries({ admin, alice, bob, trader })) {
+    for (const [name, kp] of Object.entries({ admin, alice, bob, carol, trader })) {
       const a = await createAssociatedTokenAccount(connection, admin, mintA, kp.publicKey);
       const b = await createAssociatedTokenAccount(connection, admin, mintB, kp.publicKey);
       await mintTo(connection, admin, mintA, a, admin, 1_000_000 * ONE);
@@ -181,6 +182,10 @@ describe("liquidity-vault", () => {
       await expectError(() => deposit(alice, "alice", new BN(0)), "ZeroAmount");
     });
 
+    it("минимальный депозит — 1 токен (0.5 токена отклоняется)", async () => {
+      await expectError(() => deposit(alice, "alice", units(0.5)), "DepositTooSmall");
+    });
+
     it("пример из методички: 1100 в vault, 1000 share → за 110 токенов дают 100 share", async () => {
       // «Vault поработал и заработал» — имитируем доход прямым переводом 100 токенов в хранилище
       await transfer(connection, admin, ata.admin.a, p.vaultA, admin, 100 * ONE);
@@ -210,6 +215,34 @@ describe("liquidity-vault", () => {
       .signers([u])
       .rpc();
 
+  const withdrawAll = (u: Keypair, name: string, withB = false) =>
+    program.methods
+      .withdrawAll()
+      .accounts({
+        user: u.publicKey,
+        vault: p.vault,
+        mintA,
+        shareMint: p.shareMint,
+        vaultA: p.vaultA,
+        vaultB: withB ? p.vaultB : null,
+        userTokenA: ata[name].a,
+        userShare: getAssociatedTokenAddressSync(p.shareMint, u.publicKey),
+      } as any)
+      .signers([u])
+      .rpc();
+
+  const closeCard = (u: Keypair) =>
+    program.methods
+      .closeUserAccount()
+      .accounts({
+        user: u.publicKey,
+        vault: p.vault,
+        shareMint: p.shareMint,
+        userShare: getAssociatedTokenAddressSync(p.shareMint, u.publicKey),
+      } as any)
+      .signers([u])
+      .rpc();
+
   describe("Неделя 10: CPI и вывод", () => {
     it("вывод: сжигаем share, получаем долю (100 share → 110 токенов)", async () => {
       const before = await bal(ata.alice.a);
@@ -228,6 +261,46 @@ describe("liquidity-vault", () => {
 
     it("нельзя вывести больше share, чем выпущено", async () => {
       await expectError(() => withdraw(bob, "bob", units(1_000_000)), "AmountTooSmall");
+    });
+
+    it("три пользователя: доля каждого в vault пропорциональна его share", async () => {
+      await program.methods.openUserAccount().accounts({ user: carol.publicKey, vault: p.vault }).signers([carol]).rpc();
+      // сейчас в vault 1100 токенов и 1000 share (цена 1.1) → за 330 токенов carol получает 300 share
+      await deposit(carol, "carol", units(330));
+      const supply = await shareSupply();
+      const assets = await bal(p.vaultA);
+      const shares = {
+        alice: await bal(getAssociatedTokenAddressSync(p.shareMint, alice.publicKey)),
+        bob: await bal(getAssociatedTokenAddressSync(p.shareMint, bob.publicKey)),
+        carol: await bal(getAssociatedTokenAddressSync(p.shareMint, carol.publicKey)),
+      };
+      assert.equal(shares.alice + shares.bob + shares.carol, supply);
+      const value = (s: bigint) => (s * assets) / supply;
+      assert.equal(value(shares.alice), BigInt(990 * ONE));
+      assert.equal(value(shares.bob), BigInt(110 * ONE));
+      assert.equal(value(shares.carol), BigInt(330 * ONE));
+      assert.equal(shares.carol, BigInt(300 * ONE));
+    });
+
+    it("withdraw_all: carol выводит все свои share одним вызовом", async () => {
+      const before = await bal(ata.carol.a);
+      await withdrawAll(carol, "carol");
+      assert.equal(await bal(getAssociatedTokenAddressSync(p.shareMint, carol.publicKey)), 0n);
+      assert.equal((await bal(ata.carol.a)) - before, BigInt(330 * ONE));
+    });
+
+    it("нельзя закрыть карточку, пока у пользователя есть share", async () => {
+      await expectError(() => closeCard(bob), "CardNotEmpty");
+    });
+
+    it("пустая карточка закрывается, рента возвращается пользователю", async () => {
+      const card = userAccountPda(program.programId, p.vault, carol.publicKey);
+      const rent = (await connection.getAccountInfo(card))!.lamports;
+      const before = await connection.getBalance(carol.publicKey);
+      await closeCard(carol);
+      assert.isNull(await connection.getAccountInfo(card));
+      // комиссию за транзакцию платит провайдер (админ), поэтому carol получает ренту целиком
+      assert.equal((await connection.getBalance(carol.publicKey)) - before, rent);
     });
   });
 
@@ -398,6 +471,11 @@ describe("liquidity-vault", () => {
       await expectError(() => vaultSwap(true, amountIn, expected.muln(2)), "TooLittleOutputReceived");
     });
 
+    it("за один обмен нельзя отдать больше 50% токена A vault (SwapTooLarge)", async () => {
+      const total = new BN((await bal(p.vaultA)).toString());
+      await expectError(() => vaultSwap(true, total.divn(2).addn(1), new BN(0)), "SwapTooLarge");
+    });
+
     it("обменивает половину A на B с минимумом -1% от ожидаемого", async () => {
       const total = new BN((await bal(p.vaultA)).toString());
       const amountIn = total.divn(2);
@@ -501,6 +579,50 @@ describe("liquidity-vault", () => {
       assert.isTrue(feesA > 0n && feesB > 0n);
     });
 
+    it("докладывает собранные комиссии в позицию (increase_liquidity)", async () => {
+      const m = await managePositionAccounts(program, clmm, mintA);
+      const a = new BN((await bal(p.vaultA)).toString());
+      const b = new BN((await bal(p.vaultB)).toString());
+      const amount0 = mint0.equals(mintA) ? a : b;
+      const amount1 = mint0.equals(mintA) ? b : a;
+      const liquidity = liquidityFromAmounts(
+        m.pool.sqrtPriceX64,
+        m.position.tickLowerIndex,
+        m.position.tickUpperIndex,
+        amount0,
+        amount1,
+      )
+        .muln(95)
+        .divn(100);
+      assert.isTrue(liquidity.gtn(0));
+      const before = new BN(m.position.liquidity.toString());
+      await program.methods
+        .increaseLiquidity(liquidity, amount0, amount1)
+        .accounts(m.accounts as any)
+        .remainingAccounts(m.remaining)
+        .preInstructions([computeIx()])
+        .rpc();
+      const pos: any = await (clmm.account as any).personalPositionState.fetch(m.accounts.personalPosition);
+      assert.equal(pos.liquidity.toString(), before.add(liquidity).toString());
+      console.log(`      ликвидность ${before.toString()} → ${pos.liquidity.toString()}`);
+      // токены ушли из хранилищ в пул
+      assert.isTrue((await bal(p.vaultA)) < BigInt(a.toString()) || (await bal(p.vaultB)) < BigInt(b.toString()));
+    });
+
+    it("не-админ не может докладывать ликвидность", async () => {
+      const m = await managePositionAccounts(program, clmm, mintA);
+      await expectError(
+        () =>
+          program.methods
+            .increaseLiquidity(new BN(1), new BN(1), new BN(1))
+            .accounts({ ...(m.accounts as any), admin: alice.publicKey })
+            .remainingAccounts(m.remaining)
+            .signers([alice])
+            .rpc(),
+        "Unauthorized",
+      );
+    });
+
     it("закрывает позицию с минимумами (-1%) и получает оба токена", async () => {
       const m = await managePositionAccounts(program, clmm, mintA);
       const est = amountsFromLiquidity(m.pool.sqrtPriceX64, m.position.tickLowerIndex, m.position.tickUpperIndex, m.position.liquidity);
@@ -569,10 +691,16 @@ describe("liquidity-vault", () => {
 
       const sa = await bal(aliceShare);
       const sb = await bal(bobShare);
-      await withdraw(alice, "alice", new BN(sa.toString()), true);
+      assert.isTrue(sa > 0n);
+      await withdrawAll(alice, "alice", true);
       await withdraw(bob, "bob", new BN(sb.toString()), true);
       assert.equal(await shareSupply(), 0n);
       assert.equal(await bal(p.vaultA), 0n);
+      // карточки больше не нужны — закрываем и забираем ренту
+      for (const u of [alice, bob]) {
+        await closeCard(u);
+        assert.isNull(await connection.getAccountInfo(userAccountPda(program.programId, p.vault, u.publicKey)));
+      }
     });
   });
 });

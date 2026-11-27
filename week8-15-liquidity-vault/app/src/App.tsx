@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider, WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { BN } from "@coral-xyz/anchor";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { CLUSTER, RPC_URL, MINT_A, explorerTx, explorerAddr } from "./config";
 import { LocalKeypairWalletAdapter } from "./localWallet";
 import { useVault, VaultState } from "./useVault";
@@ -14,19 +14,55 @@ import {
   managePositionAccounts,
 } from "../../sdk/vault";
 import { priceToTick, liquidityFromAmounts, amountsFromLiquidity, sqrtPriceX64ToPrice } from "../../sdk/raydium";
+import { userAccountPda } from "../../sdk/vault";
+import { formatAmount, parseAmount, toInput } from "./lib/amount";
+import { maxSwapIn, previewWithdraw, sharePercent } from "./lib/math";
+import { checkDeposit, checkWithdraw } from "./lib/validate";
+import { describeError } from "./lib/errors";
+import { loadHistory, type HistoryItem } from "./lib/history";
 
 // ---------- форматирование ----------
-const fmt = (x: bigint | undefined, dec: number, digits = 4) =>
-  x === undefined ? "—" : (Number(x) / 10 ** dec).toLocaleString("ru-RU", { maximumFractionDigits: digits });
-const toUnits = (s: string, dec: number) => new BN(Math.round(Number(s.replace(",", ".")) * 10 ** dec).toString());
+const fmt = (x: bigint | undefined, dec: number, digits = 4) => (x === undefined ? "—" : formatAmount(x, dec, digits));
+/** Строка → BN без float; при ошибке ввода бросаем понятный текст. */
+const toUnits = (s: string, dec: number) => {
+  const p = parseAmount(s, dec);
+  if (!p.ok) throw new Error(p.error);
+  return new BN(p.raw!.toString());
+};
+/** Slippage «1,5» (%) → 150 базисных пунктов; от 0 до 50%. */
+const slipBps = (s: string) => {
+  const p = parseAmount(s, 2);
+  if (!p.ok || p.raw! > 5000n) throw new Error("Slippage — число от 0 до 50 (%)");
+  return Number(p.raw!);
+};
 const short = (k?: PublicKey | string) => (k ? `${k.toString().slice(0, 4)}…${k.toString().slice(-4)}` : "—");
 
-type TxItem = { label: string; status: "pending" | "ok" | "error"; sig?: string; error?: string };
+/** Ключ тестового кошелька для `npm run dev`: создаётся один раз и хранится в localStorage. */
+function devWalletSecret(): number[] | null {
+  try {
+    const saved = localStorage.getItem("dev-wallet-secret");
+    if (saved) return JSON.parse(saved);
+    const kp = Keypair.generate();
+    const arr = Array.from(kp.secretKey);
+    localStorage.setItem("dev-wallet-secret", JSON.stringify(arr));
+    return arr;
+  } catch {
+    return null;
+  }
+}
+
+type TxItem = { id: number; label: string; status: "pending" | "ok" | "error"; sig?: string; error?: string };
 
 export default function App() {
   const wallets = useMemo(() => {
     const secret = import.meta.env.VITE_LOCAL_SECRET;
-    return CLUSTER === "localnet" && secret ? [new LocalKeypairWalletAdapter(JSON.parse(secret))] : [];
+    if (CLUSTER === "localnet" && secret) return [new LocalKeypairWalletAdapter(JSON.parse(secret))];
+    // Только в `npm run dev`: тестовый кошелёк без Phantom (ключ в localStorage браузера, только для devnet-токенов)
+    if (import.meta.env.DEV) {
+      const key = devWalletSecret();
+      if (key) return [new LocalKeypairWalletAdapter(key)];
+    }
+    return [];
   }, []);
   return (
     <ConnectionProvider endpoint={RPC_URL}>
@@ -48,15 +84,16 @@ function Main() {
   /** Отправить транзакцию и показать её статус со ссылкой на Explorer */
   const run = async (label: string, fn: () => Promise<string>) => {
     const id = Date.now();
-    setTxs((t) => [{ label, status: "pending" } as TxItem, ...t].slice(0, 8));
+    setTxs((t) => [{ id, label, status: "pending" } as TxItem, ...t].slice(0, 8));
+    v.setBusy(true);
     try {
       const sig = await fn();
-      setTxs((t) => t.map((x, i) => (i === 0 && x.status === "pending" ? { ...x, status: "ok", sig } : x)));
+      setTxs((t) => t.map((x) => (x.id === id ? { ...x, status: "ok", sig } : x)));
     } catch (e: any) {
-      const logs: string[] = e?.logs ?? e?.transactionLogs ?? [];
-      const msg = e?.error?.errorMessage ?? logs.find((l) => l.includes("Error Message")) ?? e?.message ?? String(e);
-      setTxs((t) => t.map((x, i) => (i === 0 && x.status === "pending" ? { ...x, status: "error", error: msg } : x)));
-      console.error(id, e);
+      setTxs((t) => t.map((x) => (x.id === id ? { ...x, status: "error", error: describeError(e) } : x)));
+      console.error(label, e);
+    } finally {
+      v.setBusy(false);
     }
     await v.refresh();
   };
@@ -82,7 +119,7 @@ function Main() {
           либо задайте <code>VITE_MINT_A</code>.
         </div>
       )}
-      {v.error && <div className="card warn">Ошибка загрузки: {v.error}</div>}
+      {v.error && <div className="card warn">Не удалось загрузить данные: {v.error}</div>}
       {s && !s.exists && <div className="card warn">Vault для этого токена ещё не создан.</div>}
 
       {s?.exists && <Stats s={s} pdas={v.pdas} />}
@@ -105,8 +142,8 @@ function Main() {
         <section className="card">
           <h2>Транзакции</h2>
           <ul className="txs">
-            {txs.map((t, i) => (
-              <li key={i} className={t.status}>
+            {txs.map((t) => (
+              <li key={t.id} className={t.status}>
                 <span className="dot" />
                 <b>{t.label}</b>
                 {t.status === "pending" && <span className="muted"> — отправляется…</span>}
@@ -131,7 +168,8 @@ function Main() {
 
 function Stats({ s, pdas }: { s: VaultState; pdas: any }) {
   const idle = !s.hasPosition && s.vaultB === 0n;
-  const sharePrice = s.shareSupply > 0n ? Number(s.vaultA) / Number(s.shareSupply) : 1;
+  const one = 10n ** BigInt(s.decimalsA);
+  const sharePrice = s.shareSupply > 0n ? formatAmount(previewWithdraw(one, s.vaultA, s.shareSupply), s.decimalsA, 6) : "1";
   const status = s.hasPosition
     ? "Средства в позиции Raydium"
     : s.vaultB > 0n
@@ -148,7 +186,7 @@ function Stats({ s, pdas }: { s: VaultState; pdas: any }) {
         <span className="muted">Выпущено share</span>
         <b>{fmt(s.shareSupply, s.decimalsA)}</b>
         <span className="muted">
-          {idle ? `цена 1 share ≈ ${sharePrice.toFixed(4)} A` : "цена share — после закрытия позиции"}
+          {idle ? `цена 1 share ≈ ${sharePrice} A` : "цена share — после закрытия позиции"}
         </span>
       </div>
       <div className="card stat">
@@ -171,107 +209,225 @@ function Stats({ s, pdas }: { s: VaultState; pdas: any }) {
   );
 }
 
-function UserPanel({ v, run }: { v: ReturnType<typeof useVault>; run: (l: string, f: () => Promise<string>) => void }) {
+function UserPanel({ v, run }: { v: ReturnType<typeof useVault>; run: (l: string, f: () => Promise<string>) => Promise<void> }) {
   const [dep, setDep] = useState("100");
   const [wd, setWd] = useState("");
   const s = v.state!;
   if (!v.wallet) return <div className="card">Подключите кошелёк (Phantom или Solflare в режиме devnet).</div>;
   const u = s.user;
   const idle = !s.hasPosition && s.vaultB === 0n;
+  const dec = s.decimalsA;
+  const nums = { decimals: dec, totalAssets: s.vaultA, totalShares: s.shareSupply };
+  const depCheck = checkDeposit(dep, u?.tokenA ?? 0n, nums);
+  const wdCheck = checkWithdraw(wd, u?.shares ?? 0n, nums);
+  const pausedReason = idle ? null : "Сейчас средства vault в работе (позиция или обмен в Raydium) — внесение и вывод временно закрыты.";
+  const lowSol = (u?.sol ?? 0) < 0.01;
+
+  const userAccounts = () => ({
+    user: v.wallet!.publicKey,
+    vault: v.pdas!.vault,
+    mintA: s.mintA,
+    shareMint: v.pdas!.shareMint,
+    vaultA: v.pdas!.vaultA,
+    vaultB: s.hasPool ? v.pdas!.vaultB : null,
+    userTokenA: getAssociatedTokenAddressSync(s.mintA!, v.wallet!.publicKey),
+  });
+  /** При выводе у пользователя может не быть аккаунта токена A — создаём его в той же транзакции. */
+  const ensureTokenA = () => [
+    createAssociatedTokenAccountIdempotentInstruction(
+      v.wallet!.publicKey,
+      getAssociatedTokenAddressSync(s.mintA!, v.wallet!.publicKey),
+      v.wallet!.publicKey,
+      s.mintA!,
+    ),
+  ];
 
   const openCard = () =>
     run("Открыть карточку", () =>
       v.program.methods.openUserAccount().accounts({ user: v.wallet!.publicKey, vault: v.pdas!.vault }).rpc(),
     );
 
-  const deposit = () =>
-    run(`Внести ${dep} A`, () =>
+  const closeCard = () =>
+    run("Закрыть карточку (рента вернётся)", () =>
       v.program.methods
-        .deposit(toUnits(dep, s.decimalsA))
+        .closeUserAccount()
         .accounts({
           user: v.wallet!.publicKey,
           vault: v.pdas!.vault,
-          mintA: s.mintA,
           shareMint: v.pdas!.shareMint,
-          vaultA: v.pdas!.vaultA,
-          vaultB: s.hasPool ? v.pdas!.vaultB : null,
-          userTokenA: getAssociatedTokenAddressSync(s.mintA!, v.wallet!.publicKey),
+          userShare: u?.hasShareAccount ? getAssociatedTokenAddressSync(v.pdas!.shareMint, v.wallet!.publicKey) : null,
         } as any)
         .rpc(),
     );
 
-  const withdraw = () =>
-    run(`Вывести ${wd} share`, () =>
+  const deposit = async () => {
+    await run(`Внести ${formatAmount(depCheck.raw!, dec)} A`, () =>
+      v.program.methods.deposit(new BN(depCheck.raw!.toString())).accounts(userAccounts() as any).rpc(),
+    );
+  };
+
+  const withdraw = async () => {
+    await run(`Вывести ${formatAmount(wdCheck.raw!, dec)} share`, () =>
       v.program.methods
-        .withdraw(toUnits(wd, s.decimalsA))
-        .accounts({
-          user: v.wallet!.publicKey,
-          vault: v.pdas!.vault,
-          mintA: s.mintA,
-          shareMint: v.pdas!.shareMint,
-          vaultA: v.pdas!.vaultA,
-          vaultB: s.hasPool ? v.pdas!.vaultB : null,
-          userTokenA: getAssociatedTokenAddressSync(s.mintA!, v.wallet!.publicKey),
-          userShare: getAssociatedTokenAddressSync(v.pdas!.shareMint, v.wallet!.publicKey),
-        } as any)
+        .withdraw(new BN(wdCheck.raw!.toString()))
+        .accounts({ ...userAccounts(), userShare: getAssociatedTokenAddressSync(v.pdas!.shareMint, v.wallet!.publicKey) } as any)
+        .preInstructions(ensureTokenA())
+        .rpc(),
+    );
+    setWd("");
+  };
+
+  const withdrawAll = () =>
+    run("Вывести всё", () =>
+      v.program.methods
+        .withdrawAll()
+        .accounts({ ...userAccounts(), userShare: getAssociatedTokenAddressSync(v.pdas!.shareMint, v.wallet!.publicKey) } as any)
+        .preInstructions(ensureTokenA())
         .rpc(),
     );
 
-  const expectedOut =
-    wd && s.shareSupply > 0n ? (Number(toUnits(wd, s.decimalsA).toString()) * Number(s.vaultA)) / Number(s.shareSupply) : 0;
-  const expectedShares =
-    dep && s.shareSupply > 0n && s.vaultA > 0n
-      ? (Number(toUnits(dep, s.decimalsA).toString()) * Number(s.shareSupply)) / Number(s.vaultA)
-      : Number(toUnits(dep || "0", s.decimalsA).toString());
+  const busy = v.busy;
 
   return (
-    <section className="grid two">
-      <div className="card">
-        <h2>Мой баланс</h2>
-        <dl>
-          <dt>Токен A в кошельке</dt>
-          <dd>{fmt(u?.tokenA, s.decimalsA)}</dd>
-          <dt>Мои share-токены</dt>
-          <dd>{fmt(u?.shares, s.decimalsA)}</dd>
-          <dt>Моя доля в vault</dt>
-          <dd>{u && s.shareSupply > 0n ? ((Number(u.shares) / Number(s.shareSupply)) * 100).toFixed(2) + "%" : "—"}</dd>
-          <dt>Стоимость моих share</dt>
-          <dd>
-            {u && s.shareSupply > 0n ? fmt((BigInt(u.shares) * BigInt(s.vaultA)) / BigInt(s.shareSupply), s.decimalsA) + " A" : "—"}
-          </dd>
-          <dt>Карточка: внесено / выведено</dt>
-          <dd>
-            {u?.card ? `${fmt(u.card.deposited, s.decimalsA)} / ${fmt(u.card.withdrawn, s.decimalsA)}` : "не создана"}
-          </dd>
-        </dl>
-        {!u?.card && (
-          <button className="primary" onClick={openCard}>
-            Открыть карточку
-          </button>
-        )}
-      </div>
+    <>
+      <section className="grid two">
+        <div className="card">
+          <h2>Мой баланс</h2>
+          <dl>
+            <dt>SOL (на комиссии)</dt>
+            <dd>{u ? u.sol.toFixed(4) : "—"}</dd>
+            <dt>Токен A в кошельке</dt>
+            <dd>{u ? formatAmount(u.tokenA, dec, 4) : "—"}</dd>
+            <dt>Мои share-токены</dt>
+            <dd>{u ? formatAmount(u.shares, dec, 4) : "—"}</dd>
+            <dt>Моя доля в vault</dt>
+            <dd>{u ? sharePercent(u.shares, s.shareSupply) : "—"}</dd>
+            <dt>Стоимость моих share</dt>
+            <dd>{u ? formatAmount(previewWithdraw(u.shares, s.vaultA, s.shareSupply), dec, 4) + " A" : "—"}</dd>
+            <dt>Карточка: внесено / выведено</dt>
+            <dd>{u?.card ? `${formatAmount(u.card.deposited, dec, 4)} / ${formatAmount(u.card.withdrawn, dec, 4)}` : "не создана"}</dd>
+          </dl>
+          {u && (lowSol || u.tokenA === 0n) && (
+            <p className="warn-text">
+              Нужны тестовые {lowSol ? "SOL" : ""}{lowSol && u.tokenA === 0n ? " и " : ""}{u.tokenA === 0n ? "токены A" : ""}. Попросите
+              админа выполнить: <code>npm run faucet -- {v.wallet.publicKey.toBase58()}</code>
+            </p>
+          )}
+          {!u?.card ? (
+            <button className="primary" onClick={openCard} disabled={busy || lowSol}>
+              Шаг 1. Открыть карточку
+            </button>
+          ) : (
+            u.shares === 0n && (
+              <button onClick={closeCard} disabled={busy}>
+                Закрыть карточку и вернуть ренту
+              </button>
+            )
+          )}
+        </div>
 
-      <div className="card">
-        <h2>Внести</h2>
-        {!idle && <p className="warn-text">Сейчас средства vault в работе — депозит временно закрыт.</p>}
-        <div className="row">
-          <input value={dep} onChange={(e) => setDep(e.target.value)} placeholder="Сколько токенов A" />
-          <button className="primary" disabled={!u?.card || !idle} onClick={deposit}>
-            Внести
+        <div className="card">
+          {pausedReason && <p className="warn-text">{pausedReason}</p>}
+          <h2>Внести</h2>
+          <div className="row">
+            <input value={dep} onChange={(e) => setDep(e.target.value)} placeholder="Сколько токенов A" inputMode="decimal" />
+            <button onClick={() => setDep(toInput(u?.tokenA ?? 0n, dec))}>Макс</button>
+            <button
+              className="primary"
+              disabled={busy || !u?.card || !!pausedReason || !!depCheck.error}
+              onClick={deposit}
+            >
+              Внести
+            </button>
+          </div>
+          {!u?.card ? (
+            <p className="muted">Сначала откройте карточку.</p>
+          ) : depCheck.error ? (
+            <p className="err">{depCheck.error}</p>
+          ) : (
+            <p className="muted">Получите ≈ {formatAmount(depCheck.out!, dec, 6)} share</p>
+          )}
+
+          <h2>Вывести</h2>
+          <div className="row">
+            <input value={wd} onChange={(e) => setWd(e.target.value)} placeholder="Сколько share" inputMode="decimal" />
+            <button onClick={() => setWd(toInput(u?.shares ?? 0n, dec))}>Макс</button>
+            <button
+              className="primary"
+              disabled={busy || !u?.card || !!pausedReason || !!wdCheck.error}
+              onClick={withdraw}
+            >
+              Вывести
+            </button>
+          </div>
+          {wd && wdCheck.error ? (
+            <p className="err">{wdCheck.error}</p>
+          ) : wd ? (
+            <p className="muted">Получите ≈ {formatAmount(wdCheck.out!, dec, 6)} A</p>
+          ) : null}
+          <button onClick={withdrawAll} disabled={busy || !u?.card || !!pausedReason || !u?.shares}>
+            Вывести всё одной транзакцией
           </button>
         </div>
-        <p className="muted">Получите ≈ {fmt(BigInt(Math.floor(expectedShares)), s.decimalsA)} share</p>
+      </section>
+      {u?.card && <History v={v} />}
+    </>
+  );
+}
 
-        <h2>Вывести</h2>
-        <div className="row">
-          <input value={wd} onChange={(e) => setWd(e.target.value)} placeholder="Сколько share" />
-          <button onClick={() => setWd(String(Number(u?.shares ?? 0n) / 10 ** s.decimalsA))}>Макс</button>
-          <button className="primary" disabled={!u?.card || !idle || !wd} onClick={withdraw}>
-            Вывести
-          </button>
-        </div>
-        <p className="muted">Получите ≈ {fmt(BigInt(Math.floor(expectedOut)), s.decimalsA)} A</p>
-      </div>
+function History({ v }: { v: ReturnType<typeof useVault> }) {
+  const [items, setItems] = useState<HistoryItem[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const dec = v.state!.decimalsA;
+  const card = userAccountPda(v.program.programId, v.pdas!.vault, v.wallet!.publicKey);
+  const stamp = `${v.state!.user?.card?.deposited}-${v.state!.user?.card?.withdrawn}`;
+  useEffect(() => {
+    let alive = true;
+    loadHistory(v.connection, v.program.programId, card)
+      .then((x) => alive && (setItems(x), setErr(null)))
+      .catch((e) => alive && setErr(describeError(e)));
+    return () => {
+      alive = false;
+    };
+    // перезагружаем, когда меняется карточка (новый депозит или вывод)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card.toBase58(), stamp]);
+  return (
+    <section className="card">
+      <h2>История моих операций</h2>
+      {err && <p className="err">{err}</p>}
+      {!items && !err && <p className="muted">Загружаем…</p>}
+      {items && items.length === 0 && <p className="muted">Операций пока нет.</p>}
+      {items && items.length > 0 && (
+        <table className="history">
+          <thead>
+            <tr>
+              <th>Когда</th>
+              <th>Операция</th>
+              <th>Токены A</th>
+              <th>Share</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => (
+              <tr key={it.sig} className={it.failed ? "failed" : ""}>
+                <td>{it.time ? new Date(it.time * 1000).toLocaleString("ru-RU") : "—"}</td>
+                <td>
+                  {it.failed ? "ошибка" : it.kind === "deposit" ? "Внесение" : it.kind === "withdraw" ? "Вывод" : "Карточка"}
+                </td>
+                <td>{it.amount !== undefined ? (it.kind === "withdraw" ? "+" : "−") + formatAmount(it.amount, dec, 4) : ""}</td>
+                <td>{it.shares !== undefined ? (it.kind === "withdraw" ? "−" : "+") + formatAmount(it.shares, dec, 4) : ""}</td>
+                <td>
+                  <a href={explorerTx(it.sig)} target="_blank" rel="noreferrer">
+                    Explorer ↗
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }
@@ -282,7 +438,7 @@ function AdminPanel({
   isAdmin,
 }: {
   v: ReturnType<typeof useVault>;
-  run: (l: string, f: () => Promise<string>) => void;
+  run: (l: string, f: () => Promise<string>) => Promise<void>;
   isAdmin: boolean;
 }) {
   const s = v.state!;
@@ -334,7 +490,7 @@ function AdminPanel({
       const out = await getQuote();
       setQuote(fmt(BigInt(out.toString()), aToB ? s.decimalsB : s.decimalsA, 6));
     } catch (e: any) {
-      setQuote("ошибка: " + (e?.message ?? e));
+      setQuote("ошибка: " + describeError(e));
     }
   };
 
@@ -342,7 +498,8 @@ function AdminPanel({
     run(`Обмен ${amount} ${aToB ? "A → B" : "B → A"} (slippage ${slip}%)`, async () => {
       const amt = toUnits(amount, aToB ? s.decimalsA : s.decimalsB);
       const expected = await getQuote();
-      const minOut = expected.muln(Math.round((100 - Number(slip)) * 100)).divn(10000);
+      const bps = slipBps(slip);
+      const minOut = expected.muln(10000 - bps).divn(10000);
       const { accounts, remaining } = await swapAccounts(v.program, v.clmm, s.mintA!, aToB);
       return v.program.methods
         .swap(amt, minOut, new BN(0), aToB)
@@ -390,6 +547,33 @@ function AdminPanel({
         .rpc();
     });
 
+  /** Доложить свободные токены vault (обычно — собранные комиссии) в открытую позицию. */
+  const increase = () =>
+    run("Доложить свободные токены в позицию", async () => {
+      const m = await managePositionAccounts(v.program, v.clmm, s.mintA!);
+      const aIs0 = m.pool.tokenMint0.equals(s.mintA);
+      const a = new BN(s.vaultA.toString());
+      const b = new BN(s.vaultB.toString());
+      const amount0 = aIs0 ? a : b;
+      const amount1 = aIs0 ? b : a;
+      const liquidity = liquidityFromAmounts(
+        m.pool.sqrtPriceX64,
+        m.position.tickLowerIndex,
+        m.position.tickUpperIndex,
+        amount0,
+        amount1,
+      )
+        .muln(95)
+        .divn(100);
+      if (liquidity.isZero()) throw new Error("Свободных токенов слишком мало, чтобы доложить ликвидность");
+      return v.program.methods
+        .increaseLiquidity(liquidity, amount0, amount1)
+        .accounts(m.accounts as any)
+        .remainingAccounts(m.remaining)
+        .preInstructions([computeIx()])
+        .rpc();
+    });
+
   const close = () =>
     run(`Закрыть позицию (минимум −${slip}%)`, async () => {
       const m = await managePositionAccounts(v.program, v.clmm, s.mintA!);
@@ -399,7 +583,7 @@ function AdminPanel({
         m.position.tickUpperIndex,
         m.position.liquidity,
       );
-      const k = Math.round((100 - Number(slip)) * 100);
+      const k = 10000 - slipBps(slip);
       return v.program.methods
         .closePosition(est.amount0.muln(k).divn(10000), est.amount1.muln(k).divn(10000))
         .accounts(m.accounts as any)
@@ -434,10 +618,10 @@ function AdminPanel({
           <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Сумма" />
           <button
             onClick={() =>
-              setAmount(String(Number(aToB ? s.vaultA : s.vaultB) / 10 ** (aToB ? s.decimalsA : s.decimalsB)))
+              setAmount(aToB ? toInput(maxSwapIn(s.vaultA), s.decimalsA) : toInput(s.vaultB, s.decimalsB))
             }
           >
-            Всё
+            {aToB ? "Макс (50%)" : "Всё"}
           </button>
         </div>
         <div className="row">
@@ -449,6 +633,7 @@ function AdminPanel({
           </button>
         </div>
         {quote && <p className="muted">Ожидаемо получим: {quote}</p>}
+        {aToB && <p className="muted">За один обмен A → B — не больше 50% токена A vault ({fmt(maxSwapIn(s.vaultA), s.decimalsA)} A).</p>}
         {s.hasPosition && <p className="warn-text">Пока открыта позиция, свободных средств для обмена нет.</p>}
       </div>
 
@@ -477,6 +662,9 @@ function AdminPanel({
             <div className="row">
               <button className="primary" onClick={collect}>
                 Собрать комиссии
+              </button>
+              <button onClick={increase} disabled={s.vaultA === 0n && s.vaultB === 0n}>
+                Доложить свободные токены
               </button>
               <button onClick={close}>Закрыть позицию</button>
             </div>

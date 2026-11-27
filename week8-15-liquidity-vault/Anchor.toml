@@ -8,10 +8,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-liquidity_vault = "CY1oWHjzFTWDrzKq1JwyWMcJtN5T1LhuC9o2YyNnHRqK"
+liquidity_vault = "96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU"
 
 [programs.devnet]
-liquidity_vault = "CY1oWHjzFTWDrzKq1JwyWMcJtN5T1LhuC9o2YyNnHRqK"
+liquidity_vault = "96NuHqGCDcUKWXGNuHZeS1wpeMTrpc64Jnh5jVxyLRuU"
 
 [provider]
 cluster = "localnet"

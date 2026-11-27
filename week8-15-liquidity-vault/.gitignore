@@ -15,3 +15,4 @@ app/.next
 app/node_modules
 tests/fixtures/*.so
 deployments/localnet.json
+tests/fixtures/raydium_clmm.json

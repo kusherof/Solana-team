@@ -10,7 +10,9 @@
     "test:unit": "cargo test -p liquidity-vault --lib",
     "devnet:pool": "ts-node scripts/devnet/01-setup-pool.ts",
     "vault": "ts-node scripts/devnet/vault.ts",
-    "idl:sync": "cp target/idl/liquidity_vault.json sdk/liquidity_vault_idl.json && cp target/types/liquidity_vault.ts sdk/liquidity_vault_types.ts"
+    "faucet": "ts-node scripts/devnet/faucet.ts",
+    "idl:sync": "cp target/idl/liquidity_vault.json sdk/liquidity_vault_idl.json && cp target/types/liquidity_vault.ts sdk/liquidity_vault_types.ts",
+    "test:app": "cd app && npm test"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.1",

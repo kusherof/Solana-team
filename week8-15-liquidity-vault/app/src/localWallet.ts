@@ -1,6 +1,7 @@
 /**
- * Кошелёк-ключ ТОЛЬКО для localnet-разработки (без Phantom).
- * Включается, если задан VITE_LOCAL_SECRET (JSON-массив секретного ключа) и VITE_CLUSTER=localnet.
+ * Кошелёк-ключ ТОЛЬКО для разработки без Phantom: localnet (VITE_LOCAL_SECRET) или `npm run dev` на devnet.
+ * localnet: задайте VITE_LOCAL_SECRET (JSON-массив ключа) и VITE_CLUSTER=localnet.
+ * devnet: в `npm run dev` ключ создаётся сам и хранится в localStorage (любой сайт на localhost:5173 его видит).
  * Никогда не используйте с реальными ключами.
  */
 import {
@@ -11,7 +12,7 @@ import {
 import { Keypair, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 
 export class LocalKeypairWalletAdapter extends BaseSignerWalletAdapter {
-  name = "Local keypair (dev)" as WalletName<"Local keypair (dev)">;
+  name = "Тестовый кошелёк (dev)" as WalletName<"Тестовый кошелёк (dev)">;
   url = "https://solana.com";
   icon =
     "data:image/svg+xml;base64," +

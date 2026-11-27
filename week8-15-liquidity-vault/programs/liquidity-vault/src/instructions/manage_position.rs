@@ -10,7 +10,7 @@ use raydium_amm_v3::{
 
 use crate::constants::*;
 use crate::errors::VaultError;
-use crate::events::{FeesCollectedEvent, PositionClosedEvent};
+use crate::events::{FeesCollectedEvent, LiquidityIncreasedEvent, PositionClosedEvent};
 use crate::state::Vault;
 
 /// Неделя 13. Общий набор аккаунтов для «собрать комиссии» и «закрыть позицию».
@@ -196,5 +196,59 @@ pub fn close_position_handler<'a, 'b, 'c: 'info, 'info>(
 
     emit!(PositionClosedEvent { vault: vault_key, position_nft_mint: nft, liquidity, amount_a: got_a, amount_b: got_b });
     msg!("Позиция закрыта: вернулось A={}, B={}", got_a, got_b);
+    Ok(())
+}
+
+/// «Докупить ликвидность»: доложить свободные токены vault (например, собранные комиссии)
+/// в уже открытую позицию через increase_liquidity_v2 Raydium.
+/// `amount_0_max` / `amount_1_max` — сколько максимум можно списать (защита от slippage).
+pub fn increase_liquidity_handler<'a, 'b, 'c: 'info, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, ManagePosition<'info>>,
+    liquidity: u128,
+    amount_0_max: u64,
+    amount_1_max: u64,
+) -> Result<()> {
+    require!(liquidity > 0, VaultError::ZeroAmount);
+    let accs = &ctx.accounts;
+    let a_before = accs.vault_a.amount;
+    let b_before = accs.vault_b.amount;
+
+    let a_is_0 = accs.vault_0_mint.key() == accs.vault.mint_a;
+    let (t0, t1) = if a_is_0 {
+        (accs.vault_a.to_account_info(), accs.vault_b.to_account_info())
+    } else {
+        (accs.vault_b.to_account_info(), accs.vault_a.to_account_info())
+    };
+    let vault_key = accs.vault.key();
+    let seeds: &[&[u8]] = &[AUTHORITY_SEED, vault_key.as_ref(), &[accs.vault.authority_bump]];
+    let signer = &[seeds];
+
+    let cpi_accounts = cpi::accounts::IncreaseLiquidityV2 {
+        nft_owner: accs.vault_authority.to_account_info(),
+        nft_account: accs.position_nft_account.to_account_info(),
+        pool_state: accs.pool_state.to_account_info(),
+        protocol_position: accs.protocol_position.to_account_info(),
+        personal_position: accs.personal_position.to_account_info(),
+        tick_array_lower: accs.tick_array_lower.to_account_info(),
+        tick_array_upper: accs.tick_array_upper.to_account_info(),
+        token_account_0: t0,
+        token_account_1: t1,
+        token_vault_0: accs.token_vault_0.to_account_info(),
+        token_vault_1: accs.token_vault_1.to_account_info(),
+        token_program: accs.token_program.to_account_info(),
+        token_program_2022: accs.token_program_2022.to_account_info(),
+        vault_0_mint: accs.vault_0_mint.to_account_info(),
+        vault_1_mint: accs.vault_1_mint.to_account_info(),
+    };
+    let cpi_ctx = CpiContext::new_with_signer(accs.clmm_program.to_account_info(), cpi_accounts, signer)
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+    cpi::increase_liquidity_v2(cpi_ctx, liquidity, amount_0_max, amount_1_max, None)?;
+
+    ctx.accounts.vault_a.reload()?;
+    ctx.accounts.vault_b.reload()?;
+    let spent_a = a_before - ctx.accounts.vault_a.amount;
+    let spent_b = b_before - ctx.accounts.vault_b.amount;
+    emit!(LiquidityIncreasedEvent { vault: vault_key, liquidity, amount_a: spent_a, amount_b: spent_b });
+    msg!("Ликвидность увеличена на {}: списано A={}, B={}", liquidity, spent_a, spent_b);
     Ok(())
 }

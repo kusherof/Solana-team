@@ -79,6 +79,12 @@ pub fn assert_idle(vault: &Vault, vault_b: &Option<Box<Account<TokenAccount>>>) 
 
 pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     require!(amount > 0, VaultError::ZeroAmount);
+    // Минимальный депозит: 1 целый токен (защита от «пыли»).
+    let min = 10u64
+        .checked_pow(ctx.accounts.mint_a.decimals as u32)
+        .and_then(|one| one.checked_mul(MIN_DEPOSIT_TOKENS))
+        .unwrap_or(u64::MAX);
+    require!(amount >= min, VaultError::DepositTooSmall);
     assert_idle(&ctx.accounts.vault, &ctx.accounts.vault_b)?;
 
     // 1. Считаем, сколько share-токенов положено.
