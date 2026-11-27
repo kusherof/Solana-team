@@ -1,0 +1,2026 @@
+{
+  "address": "HSKLQX3Q8pwhn8gJfgDvHjVwyBV5DgGqVGCFicUuxdeX",
+  "metadata": {
+    "name": "glimmo",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Glimmo: светящиеся питомцы на Solana (NFT Token-2022, еда SPL, скрещивание генов)"
+  },
+  "instructions": [
+    {
+      "name": "adopt_egg",
+      "docs": [
+        "Купить яйцо: оплата в казну, выпуск NFT (Token-2022) и случайная ДНК."
+      ],
+      "discriminator": [
+        231,
+        166,
+        11,
+        250,
+        84,
+        40,
+        187,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet_mint",
+          "docs": [
+            "NFT питомца: Token-2022 mint, метаданные хранятся в нём самом."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.total_pets",
+                "account": "Config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "token_2022_program"
+              },
+              {
+                "kind": "account",
+                "path": "pet_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "pet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pet_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "breed",
+      "docs": [
+        "Скрестить двух взрослых питомцев (можно двух разных игроков): новое яйцо",
+        "с генами от обоих родителей и шансом мутации."
+      ],
+      "discriminator": [
+        215,
+        166,
+        48,
+        89,
+        209,
+        205,
+        125,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "partner",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parent_a",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "parent_a.mint",
+                "account": "Pet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parent_a_token"
+        },
+        {
+          "name": "parent_b",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "parent_b.mint",
+                "account": "Pet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parent_b_token"
+        },
+        {
+          "name": "food_mint",
+          "writable": true
+        },
+        {
+          "name": "owner_food",
+          "writable": true
+        },
+        {
+          "name": "child_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.total_pets",
+                "account": "Config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "child_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "token_2022_program"
+              },
+              {
+                "kind": "account",
+                "path": "child_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "child",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "child_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "claim_food",
+      "docs": [
+        "Получить порцию еды FOOD из «кормушки» (не чаще, чем раз в food_cooldown)."
+      ],
+      "discriminator": [
+        107,
+        77,
+        133,
+        165,
+        119,
+        205,
+        112,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "food_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  111,
+                  111,
+                  100
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_food",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "food_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "feed",
+      "docs": [
+        "Покормить питомца: сжигается `amount` FOOD."
+      ],
+      "discriminator": [
+        46,
+        213,
+        237,
+        176,
+        190,
+        113,
+        182,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pet.mint",
+                "account": "Pet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet_token"
+        },
+        {
+          "name": "food_mint",
+          "writable": true
+        },
+        {
+          "name": "owner_food",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "hatch",
+      "docs": [
+        "Вылупить питомца, когда истёк таймер яйца. Именно здесь выпадает ДНК."
+      ],
+      "discriminator": [
+        252,
+        228,
+        210,
+        2,
+        100,
+        135,
+        229,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pet.mint",
+                "account": "Pet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet_token"
+        },
+        {
+          "name": "pet_mint",
+          "writable": true
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Создать игру: конфиг, mint еды FOOD и казну. Может только upgrade authority программы."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program",
+          "docs": [
+            "Только тот, кто задеплоил программу (upgrade authority), может создать",
+            "игру — иначе первый встречный стал бы админом и забрал казну."
+          ],
+          "address": "HSKLQX3Q8pwhn8gJfgDvHjVwyBV5DgGqVGCFicUuxdeX"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Казна: PDA без данных, принадлежит System Program и копит SOL за яйца."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "food_mint",
+          "docs": [
+            "Mint еды FOOD (классический SPL Token), права чеканки у PDA config."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  111,
+                  111,
+                  100
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "GameParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "play",
+      "docs": [
+        "Поиграть с питомцем: настроение и опыт растут, сытость немного падает."
+      ],
+      "discriminator": [
+        213,
+        157,
+        193,
+        142,
+        228,
+        56,
+        248,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pet.mint",
+                "account": "Pet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet_token",
+          "docs": [
+            "Токен-аккаунт владельца с NFT питомца (проверяем, что NFT у него)."
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "rename",
+      "docs": [
+        "Переименовать питомца (меняется и имя NFT в метаданных Token-2022)."
+      ],
+      "discriminator": [
+        98,
+        63,
+        129,
+        146,
+        24,
+        170,
+        185,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pet.mint",
+                "account": "Pet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pet_token"
+        },
+        {
+          "name": "pet_mint",
+          "writable": true
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "update_params",
+      "docs": [
+        "Изменить параметры игры (цены, таймеры). Только администратор."
+      ],
+      "discriminator": [
+        108,
+        178,
+        190,
+        95,
+        94,
+        203,
+        116,
+        20
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "GameParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "withdraw_treasury",
+      "docs": [
+        "Вывести SOL из казны. Только администратор."
+      ],
+      "discriminator": [
+        40,
+        63,
+        122,
+        158,
+        144,
+        216,
+        83,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lamports",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Pet",
+      "discriminator": [
+        180,
+        195,
+        178,
+        241,
+        61,
+        123,
+        238,
+        32
+      ]
+    },
+    {
+      "name": "Player",
+      "discriminator": [
+        205,
+        222,
+        112,
+        7,
+        165,
+        155,
+        206,
+        218
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "Bred",
+      "discriminator": [
+        167,
+        55,
+        195,
+        125,
+        7,
+        151,
+        162,
+        70
+      ]
+    },
+    {
+      "name": "CareStreak",
+      "discriminator": [
+        231,
+        20,
+        26,
+        162,
+        124,
+        35,
+        63,
+        53
+      ]
+    },
+    {
+      "name": "EggAdopted",
+      "discriminator": [
+        137,
+        84,
+        84,
+        29,
+        247,
+        74,
+        112,
+        77
+      ]
+    },
+    {
+      "name": "Evolved",
+      "discriminator": [
+        106,
+        163,
+        160,
+        150,
+        131,
+        201,
+        19,
+        54
+      ]
+    },
+    {
+      "name": "Fed",
+      "discriminator": [
+        123,
+        143,
+        103,
+        16,
+        214,
+        190,
+        110,
+        102
+      ]
+    },
+    {
+      "name": "FoodClaimed",
+      "discriminator": [
+        115,
+        239,
+        83,
+        182,
+        70,
+        215,
+        80,
+        17
+      ]
+    },
+    {
+      "name": "Hatched",
+      "discriminator": [
+        19,
+        239,
+        110,
+        239,
+        79,
+        219,
+        18,
+        107
+      ]
+    },
+    {
+      "name": "LevelUp",
+      "discriminator": [
+        176,
+        232,
+        67,
+        200,
+        172,
+        112,
+        1,
+        22
+      ]
+    },
+    {
+      "name": "Played",
+      "discriminator": [
+        131,
+        196,
+        243,
+        0,
+        54,
+        250,
+        232,
+        133
+      ]
+    },
+    {
+      "name": "Renamed",
+      "discriminator": [
+        148,
+        232,
+        32,
+        179,
+        231,
+        9,
+        232,
+        103
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "BadName",
+      "msg": "Имя: от 1 до 20 символов, без пробелов по краям"
+    },
+    {
+      "code": 6001,
+      "name": "BadParams",
+      "msg": "Неверные параметры игры"
+    },
+    {
+      "code": 6002,
+      "name": "NotAdmin",
+      "msg": "Только администратор"
+    },
+    {
+      "code": 6003,
+      "name": "NotOwner",
+      "msg": "Вы не владеете этим питомцем"
+    },
+    {
+      "code": 6004,
+      "name": "FoodCooldown",
+      "msg": "Кормушка ещё пуста, приходите позже"
+    },
+    {
+      "code": 6005,
+      "name": "EggNotReady",
+      "msg": "Яйцо ещё не готово"
+    },
+    {
+      "code": 6006,
+      "name": "AlreadyHatched",
+      "msg": "Питомец уже вылупился"
+    },
+    {
+      "code": 6007,
+      "name": "StillEgg",
+      "msg": "Это ещё яйцо"
+    },
+    {
+      "code": 6008,
+      "name": "AlreadyFull",
+      "msg": "Питомец сыт"
+    },
+    {
+      "code": 6009,
+      "name": "ZeroFood",
+      "msg": "Нужно хотя бы 1 FOOD"
+    },
+    {
+      "code": 6010,
+      "name": "TooHungry",
+      "msg": "Питомец слишком голоден"
+    },
+    {
+      "code": 6011,
+      "name": "PlayCooldown",
+      "msg": "Питомец устал, подождите"
+    },
+    {
+      "code": 6012,
+      "name": "NotAdult",
+      "msg": "Для скрещивания нужны два взрослых питомца"
+    },
+    {
+      "code": 6013,
+      "name": "SamePet",
+      "msg": "Нельзя скрестить питомца с самим собой"
+    },
+    {
+      "code": 6014,
+      "name": "BreedCooldown",
+      "msg": "Питомец ещё отдыхает после скрещивания"
+    },
+    {
+      "code": 6015,
+      "name": "NeedPet",
+      "msg": "Сначала заведите питомца: кормушка только для хозяев"
+    },
+    {
+      "code": 6016,
+      "name": "TooManyChildren",
+      "msg": "У питомца уже максимум детей"
+    },
+    {
+      "code": 6017,
+      "name": "Related",
+      "msg": "Нельзя скрещивать родителя с его ребёнком"
+    },
+    {
+      "code": 6018,
+      "name": "TooSad",
+      "msg": "Питомцу грустно, сначала поиграйте с ним"
+    },
+    {
+      "code": 6019,
+      "name": "TreasuryEmpty",
+      "msg": "Недостаточно средств в казне"
+    },
+    {
+      "code": 6020,
+      "name": "Overflow",
+      "msg": "Арифметическое переполнение"
+    }
+  ],
+  "types": [
+    {
+      "name": "Bred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "parent_a",
+            "type": "pubkey"
+          },
+          {
+            "name": "parent_b",
+            "type": "pubkey"
+          },
+          {
+            "name": "child",
+            "type": "pubkey"
+          },
+          {
+            "name": "child_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "generation",
+            "type": "u16"
+          },
+          {
+            "name": "food_cost",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CareStreak",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "streak",
+            "type": "u16"
+          },
+          {
+            "name": "bond",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "food_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_pets",
+            "type": "u64"
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "GameParams"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "treasury_bump",
+            "type": "u8"
+          },
+          {
+            "name": "food_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EggAdopted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "hatch_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Evolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "stage",
+            "type": "u8"
+          },
+          {
+            "name": "form",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Fed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u8"
+          },
+          {
+            "name": "satiety",
+            "type": "u8"
+          },
+          {
+            "name": "mood",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FoodClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameParams",
+      "docs": [
+        "Параметры игры, которые задаёт администратор."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "egg_price",
+            "docs": [
+              "Цена яйца в лампортах."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hatch_seconds",
+            "docs": [
+              "Сколько секунд высиживается яйцо."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "decay_seconds",
+            "docs": [
+              "Раз в сколько секунд сытость и настроение падают на 1."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "food_per_claim",
+            "docs": [
+              "Сколько FOOD выдаёт кормушка за раз."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "food_cooldown",
+            "docs": [
+              "Пауза между походами к кормушке (сек)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "play_cooldown",
+            "docs": [
+              "Пауза между играми (сек)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "breed_cooldown",
+            "docs": [
+              "Базовая пауза между скрещиваниями (растёт вдвое с каждым ребёнком)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "breed_food_cost",
+            "docs": [
+              "Базовая цена скрещивания в FOOD (растёт с числом детей)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "xp_per_level",
+            "docs": [
+              "Опыт для перехода на следующий уровень = xp_per_level * текущий уровень."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "teen_level",
+            "docs": [
+              "Уровень, на котором малыш становится подростком."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "adult_level",
+            "docs": [
+              "Уровень, на котором питомец становится взрослым."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "care_period",
+            "docs": [
+              "Длина «дня заботы» для серии (сек). В настоящей игре 86400."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Hatched",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "dna",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "shiny",
+            "type": "bool"
+          },
+          {
+            "name": "mutations",
+            "type": "u8"
+          },
+          {
+            "name": "fresh_seed",
+            "docs": [
+              "false — вылупили слишком поздно, ДНК запасная"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LevelUp",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "level",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Pet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "NFT-mint (Token-2022), владелец которого управляет питомцем."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "dna",
+            "docs": [
+              "32 байта генов. Пока питомец в яйце, здесь гены родителя A",
+              "(или нули), настоящая ДНК выпадает при вылуплении."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "dna_b",
+            "docs": [
+              "Гены родителя B (только для яиц от скрещивания)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "seed_slot",
+            "docs": [
+              "Слот, хеш которого станет «кубиком» для ДНК при вылуплении."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "generation",
+            "type": "u16"
+          },
+          {
+            "name": "parent_a",
+            "type": "pubkey"
+          },
+          {
+            "name": "parent_b",
+            "type": "pubkey"
+          },
+          {
+            "name": "born_at",
+            "type": "i64"
+          },
+          {
+            "name": "hatch_at",
+            "type": "i64"
+          },
+          {
+            "name": "hatched",
+            "type": "bool"
+          },
+          {
+            "name": "level",
+            "type": "u8"
+          },
+          {
+            "name": "xp",
+            "type": "u32"
+          },
+          {
+            "name": "satiety",
+            "type": "u8"
+          },
+          {
+            "name": "mood",
+            "type": "u8"
+          },
+          {
+            "name": "last_tick",
+            "docs": [
+              "Момент, до которого уже посчитано «проголодание»."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_play",
+            "type": "i64"
+          },
+          {
+            "name": "last_breed",
+            "type": "i64"
+          },
+          {
+            "name": "times_fed",
+            "type": "u32"
+          },
+          {
+            "name": "times_played",
+            "type": "u32"
+          },
+          {
+            "name": "children",
+            "type": "u8"
+          },
+          {
+            "name": "bond",
+            "docs": [
+              "Привязанность: растёт от заботы, падает, если про питомца забыли."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "streak",
+            "docs": [
+              "Серия «дней заботы» подряд."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "last_care_period",
+            "docs": [
+              "Номер последнего «дня заботы»."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "care_mistakes",
+            "docs": [
+              "Сколько раз питомец доходил до нуля сытости."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "form",
+            "docs": [
+              "Облик взрослого (FORM_*), фиксируется при эволюции во взрослого."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Played",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "satiety",
+            "type": "u8"
+          },
+          {
+            "name": "mood",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Player",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "last_food_claim",
+            "type": "i64"
+          },
+          {
+            "name": "eggs_adopted",
+            "type": "u32"
+          },
+          {
+            "name": "pets_bred",
+            "type": "u32"
+          },
+          {
+            "name": "actions",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Renamed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pet",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ]
+}

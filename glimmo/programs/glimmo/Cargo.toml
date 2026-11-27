@@ -1,0 +1,22 @@
+[package]
+name = "glimmo"
+version = "0.1.0"
+description = "Glimmo: светящиеся питомцы на Solana (NFT Token-2022, еда SPL, скрещивание генов)"
+edition = "2021"
+rust-version = "1.79"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "glimmo"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+anchor-spl = { version = "0.31.1", features = ["token", "token_2022", "token_2022_extensions", "associated_token"] }

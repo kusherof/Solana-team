@@ -1,0 +1,7 @@
+{
+  "name": "Glimmo",
+  "symbol": "GLIM",
+  "description": "Светящийся питомец из игры Glimmo на Solana. Внешность рисуется из ДНК, которая хранится в аккаунте программы и в поле dna метаданных NFT.",
+  "image": "https://raw.githubusercontent.com/kusherof/Solana-team/main/glimmo/app/public/nft/glimmo.svg",
+  "attributes": [{ "trait_type": "Game", "value": "Glimmo" }]
+}
